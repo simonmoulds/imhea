@@ -1,3 +1,6 @@
+# Raw data files [for now]
+inst/extdata/
+
 # History files
 .Rhistory
 .Rapp.history
@@ -37,3 +40,6 @@ vignettes/*.pdf
 
 # R Environment Variables
 .Renviron
+.Rproj.user
+.Rdata
+.DS_Store
