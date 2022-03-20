@@ -20,13 +20,14 @@ precipitation <- function(file,
                           bucket_volume,
                           date_column = "Date",
                           event_column = "Event mm") {
-  ## ## FOR TESTING:
-  ## file = "inst/extdata/iMHEA_raw/HUA/iMHEA_HUA_01_PD_01_raw.csv"
+  ## FOR TESTING:
+  file = "inst/extdata/iMHEA_raw/HUA/iMHEA_HUA_01_PD_01_raw.csv"
   x <- readr::read_csv(file)
   tz <- "Etc/GMT-5"
   try(tz <- lutz::tz_lookup_coords(lat, lon, method = "accurate"), silent = TRUE)
   times <- x[[date_column]] %>% as.POSIXct(tz = tz, format = "%d/%m/%Y %H:%M:%S")
   events <- x[[event_column]]
+  events_cleaned <- remove_repetitive_tips(events, times)
 }
 
 ## precipitation_qc <- function(x) {
@@ -34,11 +35,18 @@ precipitation <- function(file,
 ##   NULL
 ## }
 
-remove_repetitive_tips <- function(x) {
+remove_repetitive_tips <- function(events, times) {
   ## Remove repetitive tips above maximum intensity
   nd = 86400
   min_tip_interval = 1.1 / nd
-  ## x = read_csv("inst/extdata/iMHEA_raw/HUA/iMHEA_HUA_01_PD_01_raw.csv")
+  ## Time between tips
+  intervals = int_length(int_diff(times))
+  ## Add arbitrary long interval at the beginning of the time series
+  intervals = c(min_tip_interval * 100, intervals)
+  ## Identify tips separated by less than min_tip_interval
+  idx = which(intervals <= min_tip_interval) + 1
+  events[idx] = 0.
+  events
 }
 
 ## function [NewEvent_mm] = iMHEA_Depure(Event_Date,Event_mm)
