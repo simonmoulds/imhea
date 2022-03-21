@@ -296,6 +296,133 @@ aggregation_cs <- function(Event_Date, ...) {
       }
     }
   }
+
+  for (i in 1:length(n)) {
+    ## Procedure:
+    ## % Events with more than 2 points (fit a CS) [Wang et al, 2008].
+    ## % Events with only 2 points (fit a line) [Ciach, 2003].
+    ## % Events with only 1 points (distribute at a rate of 3 mm h^{-1}) [Wang et al, 2008].
+    if (n[i] >= 1) {
+      ## Relative time in seconds from the beginning of the event.
+      x = (NewEvent_Date[indx[i] + (0:n[i])] - NewEvent_Date[indx[i]]) * 86400
+      ## Cumulative rainfall during the event
+      y = cumsum(NewEvent_mm[indx[i]:(indx[i] + n[i])])
+      if (halves) {
+        ## Estimate initial point of the rainfall event
+        ## Reduce half a second only to ensure correct initial data calculation
+        x0 = bucket * (x[2] - x[1]) / (y[2] - y[1]) - 0.5
+        xf = bucket * (rev(x)[1] - rev(x)[2]) / (rev(y)[1] - rev(y)[2])
+        ## Allocate only 1-half tip at the start and end of event
+        x = x + x0
+        y = y - bucket / 2
+        y = c(0, y, rev(y)[1] + bucket / 2)
+        x = c(0, x, rev(x)[1] + xf)
+        x = round(x)
+        ## Aggregating data at 1-min interval starting at :00
+        DI = max(DI, floor((NewEvent_Date[indx[i]] - x0 / 86400) * nd)) # Initial date in [min]
+        DF = ceiling((NewEvent_Date[indx[i] + n[i]] + xf / 86400) * nd)
+        x1m = (DI:DF) - NewEvent_Date[indx[i]] * nd + x0 / 60 # Equally spaced time interval
+        x1m = round(60 * x1m) # Convert to seconds
+      } else {
+        x0 = -0.5
+        ## Aggregating data at 1-min interval starting at :00
+        DI = max(DI, floor((NewEvent_Date[indx[i]] + 0.5 / 86400) * nd)) # Initial date in [min]
+        DF = ceiling(NewEvent_Date[indx[i] + n[i]] * nd)                 # Final date in [min]
+        x1m = DI:DF - NewEvent_Date[indx[i]] * nd                        # Equally spaced time interval
+        x1m = round(60 * x1m) # Convert to seconds
+      }
+      ## % CS fitted to the current event and interpolated at 1-sec.
+      ## % pp = spline(x,y); % yy = spline(x,y,xx);
+      if (halves) {
+        ## % Set the estimated zero rate endpoints first derivatives to 0
+        ## % [Sadler and Busscher, 1989].
+        pp = spline(x, c(0, y, 0)) # TODO check this
+      } else {
+        ## % Set the endpoints second derivatives to 0 [Wang et al, 2008].
+        pp = csape(x, y, 'second') # TODO
+      }
+      y1m = fnval(pp,x1m); # % Cumulative rainfall at each x1m TODO
+      if (halves) {
+        ## % Zero rainfall rates at borders.
+        y1m[1] = 0
+        y1m[length(y1m)] = y1m[length(y1m) - 1]
+      }
+      ## r1m = [y1m(1);diff(y1m)]; % Rainfall rate at each x1m [mm min^{-1}]
+      r1m = c(y1m[1], diff(y1m)) # Rainfall rate at each x1m [mm min^{-1}]
+      ## % Correction for negative intensities and biased volumes.
+      ## TODO intCorrection(...)
+      ## [r2m,y2m,biased(i),bEvent(i)] = intCorrection(r1m,y,Lowint,halves,x,x1m);
+      ## Assemble cumulative rainfall curve
+      ix = NewDate_1min >= DI & NewDate_1min <= DF
+      CumP_1min[ix] = CumP_1min + y2m
+      CumP_1min[NewDate_1min > DF] = CumP_1min[NewDate_1min == DF]
+      if (any(is.nan(r2m))) {
+        ## Calculations for event plots
+        ## TODO
+      }
+      ## % Plot events if selected.
+      ## if nargin > 6 || any(isnan(r2m)) %|| bEvent(i)>0
+      ##     % Calculations for event plots.
+      ##     % xx = (0:x(end))';
+      ##     % yy = fnval(pp,xx);
+      ##     % Aggregating data at 1 min interval
+      ##     % Alternatively starting at x(1).
+      ##     % x1m = 60*(1:floor(length(xx)/60))'-1; % Equally spaced time interval.
+      ##     % y1m = yy(60*(1:floor(length(xx)/60)));
+      ##     % r1m = 60*(yy(60*(1:floor(length(xx)/60)))-yy(60*(1:floor(length(xx)/60))-59));
+
+      ##     % Linear sections of the current event and interpolated at 1-sec.
+      ##     y3m = interp1(x,y,x1m,'linear',0); % Cumulative rainfall at each x1m
+      ##     if halves ~= false || halves ~= 0
+      ##         % Zero rainfall rates at borders.
+      ##         y3m(1)= 0; y3m(end) = y3m(end-1);
+      ##     end
+      ##     r3m = [y3m(1);diff(y3m)]; % Rainfall rate at each x1m [mm min^{-1}]
+      ##     % Correction for biased volumes.
+      ##     [r4m,y4m] = intCorrection(r3m,y,Lowint,halves,x,x1m);
+
+      ##     % Tip counting
+      ##     r5m = zeros(size(x1m)); % Initialise aggregation
+      ##     p = [y(1);diff(y)];
+      ##     if x(1)==x1m(1)
+      ##         j = 2; % Data counter
+      ##         r5m(1) = p(1);
+      ##     else
+      ##         j = 1; % Data counter
+      ##     end
+      ##     for itb = 2:length(x1m)
+      ##         % Agregate values.
+      ##         while j<=length(p) && x(j)>x1m(itb-1) && x(j)<=x1m(itb)
+      ##             r5m(itb) = r5m(itb) + p(j);
+      ##             j = j+1;
+      ##         end
+      ##     end
+      ##     y5m = cumsum(r5m); % Accumulation
+
+      ##     % Plot events.
+      ##     figure(199)
+      ##     subplot(2,1,1)
+      ##     plot(x,y,'o',x1m,y5m,':',x1m,y4m,'-.',x1m,y1m,'-.',x1m,y2m,'-.')
+      ##     set(gca,'Xlim',[-60 x(end)+60])
+      ##     title(['Rainfall event number ',num2str(i)])
+      ##     xlabel('Time in seconds from the beggining of the event [s]')
+      ##     ylabel('Cumulative rainfall [mm]')
+      ##     legend('Rain gauge tip','1-min tip counting','1-min linear corrected',...
+      ##         '1-min CS interpolated','1-min CS corrected',...
+      ##         'location','NorthWest')
+      ##     legend('boxoff')
+      ##     subplot(2,1,2)
+      ##     plot(x,60*[y(1);diff(y)],'o',x1m,60*r5m,':',x1m,60*r4m,'-.',x1m,60*r1m,'-.',x1m,60*r2m,'-.')
+      ##     set(gca,'Xlim',[-60 x(end)+60])
+      ##     xlabel('Time in seconds from the beggining of the event [s]')
+      ##     ylabel('Rainfall rate [mm h^{-1}]')
+      ##     legend('Rain gauge tip','1-min tip counting','1-min linear corrected',...
+      ##         '1-min CS interpolated','1-min CS corrected',...
+      ##         'location','NorthWest')
+      ##     legend('boxoff')
+      ##     % Add breakpoint to check plots.
+      ## end
+  }
   ## h = waitbar(0,'Interpolating data...');
   ## for i = 1:length(n)
   ##     % Events with more than 2 points (fit a CS) [Wang et al, 2008].
