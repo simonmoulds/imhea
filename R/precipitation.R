@@ -77,7 +77,55 @@ rain_gauge_network <- function(...,
   n_gauges = length(dots)
 }
 
-aggregation_cs <- function(Event_Date, ...) {
+## function [NewDate,NewP,CumP,Single] = iMHEA_AggregationCS(Event_Date,Event_mm,scale,bucket,mintip,halves,varargin)
+## %iMHEA Cubic spline interpolation rainfall aggregation.
+## % [NewDate,NewP,CumP,Single] =
+## % iMHEA_AggregationCS(Event_Date,Event_mm,scale,Vb,mintip,halves,flag)
+## % aggregates precipitation data using cublic spline interpolation.
+## %
+## % Input:
+## % Event_Date= dd/mm/yyyy hh:mm:ss [date format].
+## % Event_mm  = Precipitation [mm].
+## % scale     = Agregation interval [min].
+## % bucket    = Rain gauge bucket volume [mm].
+## % mintip    = Aggregate at 1-min before interpolation [default: true].
+## % halves    = Add zero rates at estimated event endpoints [default: true].
+## % flag1     = leave empty NOT to graph data inventory and event plots.
+aggregation_cs <- function(Event_Date, Event_mm, scale, bucket, mintip, halves, ...) {
+  ## %iMHEA Cubic spline interpolation rainfall aggregation.
+  ##
+  ## Input:
+  ## ======
+  ## Event_Date= dd/mm/yyyy hh:mm:ss [date format].
+  ## Event_mm  = Precipitation [mm].
+  ## scale     = Agregation interval [min].
+  ## bucket    = Rain gauge bucket volume [mm].
+  ## mintip    = Aggregate at 1-min before interpolation [default: true].
+  ## halves    = Add zero rates at estimated event endpoints [default: true].
+  ## flag1     = leave empty NOT to graph data inventory and event plots.
+  ##
+  ## Return:
+  ## =======
+  ## NewDate   = dd/mm/yyyy hh:mm:ss [date format] at specified interval.
+  ## NewP      = Agregated precipitation [mm].
+  ## CumP      = Cumulative rainfall [mm].
+  ## Single    = Single tip rainfall rates [mm].
+
+  ## FOR TESTING:
+  library(tidyverse)
+  library(lubridate)
+  file = "inst/extdata/iMHEA_raw/HUA/iMHEA_HUA_01_PD_01_raw.csv"
+  x <- readr::read_csv(file)
+  tz <- "Etc/GMT-5"
+  try(tz <- lutz::tz_lookup_coords(lat, lon, method = "accurate"), silent = TRUE)
+  Event_Date <- x[["Date"]] %>% as.POSIXct(tz = tz, format = "%d/%m/%Y %H:%M:%S")
+  Event_mm <- x[["Event mm"]]
+  Event_mm <- remove_consecutive_tips(Event_mm, Event_Date)
+  scale = 15 # 15-minute intervals
+  bucket = 0.2
+  mintip = TRUE
+  halves = TRUE
+
   ## %% USER-DEFINED VARIABLES
   ## % Minimum intensity to separate events: 0.2 mm h^-1 [Padron et al, 2015].
   Minint = 0.2/1; # % 0.2 mm over 1 hour
@@ -92,7 +140,7 @@ aggregation_cs <- function(Event_Date, ...) {
   ## % Move date by 0.25 seconds to avoid numerical or exportation errors.
   Event_Date = Event_Date - 0.25/86400;
   ## % Event_Date = Event_Date + 0.25/86400;
-
+  stop()
   ## % Add zero rates at estimated initial and final event times, using (Vb/2):
   ## % 1 half rate and 1 half partial tip [Sadler and Busscher, 1989].
   ## % halves = true; % [default: true]
@@ -359,225 +407,97 @@ aggregation_cs <- function(Event_Date, ...) {
       if (any(is.nan(r2m))) {
         ## Calculations for event plots
         ## TODO
+        xx = 0:x[length(x)]
+        yy = fnval(pp, xx)
+        ## Aggregating data at 1-min interval
+        ## Alternatively starting at x[1]
+        x1m = 60 * (1:floor(length(xx) / 60)) - 1 # Equally spaced time interval
+        y1m = yy[60 * (1:floor(length(xx) / 60))]
+        r1m = 60 * (yy[60 * (1:floor(length(xx) / 60))] - yy[60 * (1:floor(length(xx) / 60)) - 59])
+        ## Linear sections of the current event and interpolated at 1-sec
+        y3m = interp1(x, y, x1m, 'linear', 0) # Cumulative rainfall at each x1m
+        if (halves) {
+          ## Zero rainfall rates at borders
+          y3m[1] = 0
+          y3m[length(y3m)] = y3m[length(y3m) - 1]
+        }
+        r3m = [y3m[1]:diff(y3m)] # Rainfall rate at each x1m [mm min^{-1}]
+        ## Correction for biased volumes TODO
+        ## [r4m,y4m] = intCorrection(r3m,y,Lowint,halves,x,x1m);
+
+        ## Tip counting
+        r5m = rep(0, length(x1m)) # Initialize aggregation
+        p = c(y[1], diff(y))
+        if (x[1] == x1m[1]) {
+          j = 2 # Data counter
+          r5m[1] = p[1]
+        } else {
+          j = 1 # Data counter
+        }
+        for (itb in 2:length(x1m)) {
+          ## Aggregate values
+          while (j <= length(p) & x[j] > x1m[itb-1] & x[j] <= x1m[itb]) {
+            r5m[itb] = r5m[itb] + p[j]
+            j = j + 1
+          }
+        }
+        y5m = cumsum(r5m) # Accumulation
+        ## % Plot events.
+        ## figure(199)
+        ## subplot(2,1,1)
+        ## plot(x,y,'o',x1m,y5m,':',x1m,y4m,'-.',x1m,y1m,'-.',x1m,y2m,'-.')
+        ## set(gca,'Xlim',[-60 x(end)+60])
+        ## title(['Rainfall event number ',num2str(i)])
+        ## xlabel('Time in seconds from the beggining of the event [s]')
+        ## ylabel('Cumulative rainfall [mm]')
+        ## legend('Rain gauge tip','1-min tip counting','1-min linear corrected',...
+        ##     '1-min CS interpolated','1-min CS corrected',...
+        ##     'location','NorthWest')
+        ## legend('boxoff')
+        ## subplot(2,1,2)
+        ## plot(x,60*[y(1);diff(y)],'o',x1m,60*r5m,':',x1m,60*r4m,'-.',x1m,60*r1m,'-.',x1m,60*r2m,'-.')
+        ## set(gca,'Xlim',[-60 x(end)+60])
+        ## xlabel('Time in seconds from the beggining of the event [s]')
+        ## ylabel('Rainfall rate [mm h^{-1}]')
+        ## legend('Rain gauge tip','1-min tip counting','1-min linear corrected',...
+        ##     '1-min CS interpolated','1-min CS corrected',...
+        ##     'location','NorthWest')
+        ## legend('boxoff')
+        ## % Add breakpoint to check plots.
       }
-      ## % Plot events if selected.
-      ## if nargin > 6 || any(isnan(r2m)) %|| bEvent(i)>0
-      ##     % Calculations for event plots.
-      ##     % xx = (0:x(end))';
-      ##     % yy = fnval(pp,xx);
-      ##     % Aggregating data at 1 min interval
-      ##     % Alternatively starting at x(1).
-      ##     % x1m = 60*(1:floor(length(xx)/60))'-1; % Equally spaced time interval.
-      ##     % y1m = yy(60*(1:floor(length(xx)/60)));
-      ##     % r1m = 60*(yy(60*(1:floor(length(xx)/60)))-yy(60*(1:floor(length(xx)/60))-59));
-
-      ##     % Linear sections of the current event and interpolated at 1-sec.
-      ##     y3m = interp1(x,y,x1m,'linear',0); % Cumulative rainfall at each x1m
-      ##     if halves ~= false || halves ~= 0
-      ##         % Zero rainfall rates at borders.
-      ##         y3m(1)= 0; y3m(end) = y3m(end-1);
-      ##     end
-      ##     r3m = [y3m(1);diff(y3m)]; % Rainfall rate at each x1m [mm min^{-1}]
-      ##     % Correction for biased volumes.
-      ##     [r4m,y4m] = intCorrection(r3m,y,Lowint,halves,x,x1m);
-
-      ##     % Tip counting
-      ##     r5m = zeros(size(x1m)); % Initialise aggregation
-      ##     p = [y(1);diff(y)];
-      ##     if x(1)==x1m(1)
-      ##         j = 2; % Data counter
-      ##         r5m(1) = p(1);
-      ##     else
-      ##         j = 1; % Data counter
-      ##     end
-      ##     for itb = 2:length(x1m)
-      ##         % Agregate values.
-      ##         while j<=length(p) && x(j)>x1m(itb-1) && x(j)<=x1m(itb)
-      ##             r5m(itb) = r5m(itb) + p(j);
-      ##             j = j+1;
-      ##         end
-      ##     end
-      ##     y5m = cumsum(r5m); % Accumulation
-
-      ##     % Plot events.
-      ##     figure(199)
-      ##     subplot(2,1,1)
-      ##     plot(x,y,'o',x1m,y5m,':',x1m,y4m,'-.',x1m,y1m,'-.',x1m,y2m,'-.')
-      ##     set(gca,'Xlim',[-60 x(end)+60])
-      ##     title(['Rainfall event number ',num2str(i)])
-      ##     xlabel('Time in seconds from the beggining of the event [s]')
-      ##     ylabel('Cumulative rainfall [mm]')
-      ##     legend('Rain gauge tip','1-min tip counting','1-min linear corrected',...
-      ##         '1-min CS interpolated','1-min CS corrected',...
-      ##         'location','NorthWest')
-      ##     legend('boxoff')
-      ##     subplot(2,1,2)
-      ##     plot(x,60*[y(1);diff(y)],'o',x1m,60*r5m,':',x1m,60*r4m,'-.',x1m,60*r1m,'-.',x1m,60*r2m,'-.')
-      ##     set(gca,'Xlim',[-60 x(end)+60])
-      ##     xlabel('Time in seconds from the beggining of the event [s]')
-      ##     ylabel('Rainfall rate [mm h^{-1}]')
-      ##     legend('Rain gauge tip','1-min tip counting','1-min linear corrected',...
-      ##         '1-min CS interpolated','1-min CS corrected',...
-      ##         'location','NorthWest')
-      ##     legend('boxoff')
-      ##     % Add breakpoint to check plots.
-      ## end
+    } else {
+      ## Aggregating data at 1-min interval starting at :00
+      x0 = NewEvent_mm[indx[i]] / Meanint * 60 - 1 # Time interval in [min]
+      xf = NewEvent_Date[indx[i]] * nd             # Final date in [min]
+      x = (xf - x0 * nd / 1440:xf)                 # Equally spaced divided tip
+      DI = floor((xf - x0 * nd / 1440))            # Initial date in [min]
+      DF = ceiling(xf)                             # Final date in [min]
+      x1m = (DI:DF)                                # Equally spaced time interval
+      y = NewEvent_mm[indx[i]] * rep(1, length(x)) / (x0 + 1)
+      ## Tip counting
+      r1m = rep(0, length(x1m))
+      if (x[1] == x1m[1]) {
+        j = 2 # Data counter
+        r1m[1] = y[1]
+      } else {
+        j = 1 # Data counter
+      }
+      for (itb in 2:length(x1m)) {
+        ## Aggregate values
+        while (j <= length(y) & x[j] > x1m[itb-1] & x[j] <= x1m[itb]) {
+          r1m[itb] = r1m[itb] + y[j]
+          j = j + 1
+        }
+      }
+      y1m = cumsum(r1m) # Cumulative rainfall at each x1m
+      ## Assemble cumulative rainfall curve
+      CumP_1min[NewDate_1min >= DI & NewDate_1min <= DF] = CumP_1min[NewDate_1min >= DI & NewDate_1min <= DF] + y1m
+      CumP_1min[NewDate_1min > DF] = CumP_1min[NewDate_1min == DF]
+      ## Assemble single tip rainfall vector
+      Single_1min[NewDate_1min >= DI & NewDate_1min <= DF] = Single_1min[NewDate_1min >= DI & NewDate_1min <= DF] + y1m
+      Single_1min[NewDate_1min > DF] = Single_1min[NewDate_1min == DF]
+    }
   }
-  ## h = waitbar(0,'Interpolating data...');
-  ## for i = 1:length(n)
-  ##     % Events with more than 2 points (fit a CS) [Wang et al, 2008].
-  ##     % Events with only 2 points (fit a line) [Ciach, 2003].
-  ##     % Events with only 1 points (distribute at a rate of 3 mm h^{-1}) [Wang et al, 2008].
-  ##     if n(i) >= 1
-  ##         % Relative time in seconds from the beggining of the event.
-  ##         x = (NewEvent_Date(indx(i)+(0:n(i)))-NewEvent_Date(indx(i)))*86400;
-  ##         % Cumulative rainfall during the event.
-  ##         y = cumsum(NewEvent_mm(indx(i):indx(i)+n(i)));
-  ##         if halves ~= false || halves ~= 0
-  ##             % Estimate initial point of the rainfall event.
-  ##             % Reduce half a sec only to ensure correct initial date calculation.
-  ##             x0 = bucket*(x(2)-x(1))/(y(2)-y(1))-0.5;
-  ##             xf = bucket*(x(end)-x(end-1))/(y(end)-y(end-1));
-  ##             % Allocate only 1-half tip at the start and end of event.
-  ##             x = x + x0;
-  ##             y = y - bucket/2;
-  ##             y = cat(1,0,y,y(end)+bucket/2); x = cat(1,0,x,x(end)+xf);
-  ##             x = round(x);
-  ##             % Aggregating data at 1 min interval starting at :00.
-  ##             DI = max(DI,floor((NewEvent_Date(indx(i))-x0/86400)*nd)); % Initial date in [min]
-  ##             DF = ceil((NewEvent_Date(indx(i)+n(i))+xf/86400)*nd); % Final date  in [min]
-  ##             x1m = (DI:DF)' - NewEvent_Date(indx(i))*nd+x0/60; % Equally spaced time interval.
-  ##             x1m = round(60*x1m); % Convert to seconds
-  ##         else
-  ##             % x0 = -0.5; % Only to ensure correct initial date calculation.
-  ##             % Aggregating data at 1 min interval starting at :00.
-  ##             DI = max(DI,floor((NewEvent_Date(indx(i))+0.5/86400)*nd)); % Initial date in [min]
-  ##             DF = ceil(NewEvent_Date(indx(i)+n(i))*nd); % Final date  in [min]
-  ##             x1m = (DI:DF)' - NewEvent_Date(indx(i))*nd; % Equally spaced time interval.
-  ##             x1m = round(60*x1m); % Convert to seconds
-  ##         end
-  ##         % CS fitted to the current event and interpolated at 1-sec.
-  ##         % pp = spline(x,y); % yy = spline(x,y,xx);
-  ##         if halves ~= false || halves ~= 0
-  ##             % Set the estimated zero rate endpoints first derivatives to 0
-  ##             % [Sadler and Busscher, 1989].
-  ##             pp = spline(x,[0;y;0]);
-  ##         else
-  ##             % Set the endpoints second derivatives to 0 [Wang et al, 2008].
-  ##             pp = csape(x,y,'second');
-  ##         end
-  ##         y1m = fnval(pp,x1m); % Cumulative rainfall at each x1m
-  ##         if halves ~= false || halves ~= 0
-  ##             % Zero rainfall rates at borders.
-  ##             y1m(1) = 0; y1m(end) = y1m(end-1);
-  ##         end
-  ##         r1m = [y1m(1);diff(y1m)]; % Rainfall rate at each x1m [mm min^{-1}]
-  ##         % Correction for negative intensities and biased volumes.
-  ##         [r2m,y2m,biased(i),bEvent(i)] = intCorrection(r1m,y,Lowint,halves,x,x1m);
-
-  ##         % Assemblement of the cumulative rainfall curve.
-  ##         CumP_1min(NewDate_1min>=DI & NewDate_1min<=DF) = ...
-  ##             CumP_1min(NewDate_1min>=DI & NewDate_1min<=DF) + y2m;
-  ##         CumP_1min(NewDate_1min>DF) = CumP_1min(NewDate_1min==DF);
-  ##         % Plot events if selected.
-  ##         if nargin > 6 || any(isnan(r2m)) %|| bEvent(i)>0
-  ##             % Calculations for event plots.
-  ##             % xx = (0:x(end))';
-  ##             % yy = fnval(pp,xx);
-  ##             % Aggregating data at 1 min interval
-  ##             % Alternatively starting at x(1).
-  ##             % x1m = 60*(1:floor(length(xx)/60))'-1; % Equally spaced time interval.
-  ##             % y1m = yy(60*(1:floor(length(xx)/60)));
-  ##             % r1m = 60*(yy(60*(1:floor(length(xx)/60)))-yy(60*(1:floor(length(xx)/60))-59));
-
-  ##             % Linear sections of the current event and interpolated at 1-sec.
-  ##             y3m = interp1(x,y,x1m,'linear',0); % Cumulative rainfall at each x1m
-  ##             if halves ~= false || halves ~= 0
-  ##                 % Zero rainfall rates at borders.
-  ##                 y3m(1)= 0; y3m(end) = y3m(end-1);
-  ##             end
-  ##             r3m = [y3m(1);diff(y3m)]; % Rainfall rate at each x1m [mm min^{-1}]
-  ##             % Correction for biased volumes.
-  ##             [r4m,y4m] = intCorrection(r3m,y,Lowint,halves,x,x1m);
-
-  ##             % Tip counting
-  ##             r5m = zeros(size(x1m)); % Initialise aggregation
-  ##             p = [y(1);diff(y)];
-  ##             if x(1)==x1m(1)
-  ##                 j = 2; % Data counter
-  ##                 r5m(1) = p(1);
-  ##             else
-  ##                 j = 1; % Data counter
-  ##             end
-  ##             for itb = 2:length(x1m)
-  ##                 % Agregate values.
-  ##                 while j<=length(p) && x(j)>x1m(itb-1) && x(j)<=x1m(itb)
-  ##                     r5m(itb) = r5m(itb) + p(j);
-  ##                     j = j+1;
-  ##                 end
-  ##             end
-  ##             y5m = cumsum(r5m); % Accumulation
-
-  ##             % Plot events.
-  ##             figure(199)
-  ##             subplot(2,1,1)
-  ##             plot(x,y,'o',x1m,y5m,':',x1m,y4m,'-.',x1m,y1m,'-.',x1m,y2m,'-.')
-  ##             set(gca,'Xlim',[-60 x(end)+60])
-  ##             title(['Rainfall event number ',num2str(i)])
-  ##             xlabel('Time in seconds from the beggining of the event [s]')
-  ##             ylabel('Cumulative rainfall [mm]')
-  ##             legend('Rain gauge tip','1-min tip counting','1-min linear corrected',...
-  ##                 '1-min CS interpolated','1-min CS corrected',...
-  ##                 'location','NorthWest')
-  ##             legend('boxoff')
-  ##             subplot(2,1,2)
-  ##             plot(x,60*[y(1);diff(y)],'o',x1m,60*r5m,':',x1m,60*r4m,'-.',x1m,60*r1m,'-.',x1m,60*r2m,'-.')
-  ##             set(gca,'Xlim',[-60 x(end)+60])
-  ##             xlabel('Time in seconds from the beggining of the event [s]')
-  ##             ylabel('Rainfall rate [mm h^{-1}]')
-  ##             legend('Rain gauge tip','1-min tip counting','1-min linear corrected',...
-  ##                 '1-min CS interpolated','1-min CS corrected',...
-  ##                 'location','NorthWest')
-  ##             legend('boxoff')
-  ##             % Add breakpoint to check plots.
-  ##         end
-  ##     else
-  ##         % Aggregating data at 1 min interval starting at :00.
-  ##         x0 = NewEvent_mm(indx(i))/Meanint*60-1; % Time interval in [min]
-  ##         xf = NewEvent_Date(indx(i))*nd; % Final date in [min]
-  ##         x = (xf-x0*nd/1440:xf)'; % Equally spaced divided tip
-  ##         DI = floor((xf-x0*nd/1440)); % Initial date in [min]
-  ##         DF = ceil(xf); % Final date in [min]
-  ##         x1m = (DI:DF)'; % Equally spaced time interval
-  ##         y = NewEvent_mm(indx(i))*ones(size(x))/(x0+1);
-  ##         % Tip counting
-  ##         r1m = zeros(size(x1m)); % Initialise aggregation
-  ##         if x(1)==x1m(1)
-  ##             j = 2; % Data counter
-  ##             r1m(1) = y(1);
-  ##         else
-  ##             j = 1; % Data counter
-  ##         end
-  ##         for itb = 2:length(x1m)
-  ##             % Aggregate values.
-  ##             while j<=length(y) && x(j)>x1m(itb-1) && x(j)<=x1m(itb)
-  ##                 r1m(itb) = r1m(itb) + y(j);
-  ##                 j = j+1;
-  ##             end
-  ##         end
-  ##         y1m = cumsum(r1m); % Cumulative rainfall at each x1mim
-  ##         % Assemblement of the cumulative rainfall curve.
-  ##         CumP_1min(NewDate_1min>=DI & NewDate_1min<=DF) = ...
-  ##             CumP_1min(NewDate_1min>=DI & NewDate_1min<=DF) + y1m;
-  ##         CumP_1min(NewDate_1min>DF) = CumP_1min(NewDate_1min==DF);
-  ##         % Assemblement of the single tip rainfall vector.
-  ##         Single_1min(NewDate_1min>=DI & NewDate_1min<=DF) = ...
-  ##             Single_1min(NewDate_1min>=DI & NewDate_1min<=DF) + y1m;
-  ##         Single_1min(NewDate_1min>DF) = Single_1min(NewDate_1min==DF);
-  ##     end
-  ##     waitbar(i/length(n))
-  ## end
-  ## close(h);
   ## fprintf('Maximum bias corrected in event interpolation: %5.2f%%.\n',100*nanmax(biased))
   ## fprintf('%2i event(s) with bias >25%% interpolated linearly.\n',nansum(bEvent))
   ## fprintf('\n')
@@ -587,7 +507,19 @@ aggregation_cs <- function(Event_Date, ...) {
   ## %% PREPARE THE DATA VECTORS AT THE SPECIFIED SCALE
 
   ## % Equally spaced time interval
+  NewDate = seq(NewDate_1min[1], NewDate_1min[length(NewDate_1min)], by = scale) # CHECK
   ## NewDate = (NewDate_1min(1):scale:NewDate_1min(end))';
+  if (halves) {
+    ## Rainfall rate at scale interval obtained from fitted cumulative rainfall
+    NewP = c(bucket / 2, CumP_1min[seq(scale + 1, length(CumP_1min), by = scale)] - CumP_1min[seq(1, length(CumP_1min) - scale, scale)])
+    ## % Aggregate single tip counting at scale interval.
+    Single = c(bucket / 2, Single_1min[seq(scale + 1, length(Single_1min), by = scale)] - Single_1min[seq(1, length(Single_1min) - scale, scale)])
+  } else {
+    ## Rainfall rate at scale interval obtained from fitted cumulative rainfall
+    NewP = c(0, CumP_1min[seq(scale + 1, length(CumP_1min), by = scale)] - CumP_1min[seq(1, length(CumP_1min) - scale, scale)])
+    ## % Aggregate single tip counting at scale interval.
+    Single = c(0, Single_1min[seq(scale + 1, length(Single_1min), by = scale)] - Single_1min[seq(1, length(Single_1min) - scale, scale)])
+  }
   ## if halves ~= false || halves ~= 0
   ##     % Rainfall rate at scale interval obtained from fitted cumulative rainfall.
   ##     NewP = [bucket/2;CumP_1min(scale+1:scale:end) - CumP_1min(1:scale:end-scale)];
@@ -600,26 +532,28 @@ aggregation_cs <- function(Event_Date, ...) {
   ##     Single = [0;Single_1min(scale+1:scale:end) - Single_1min(1:scale:end-scale)];
   ## end
   ## % Cumulative rainfall at scale interval.
-  ## CumP = cumsum(NewP);
+  CumP = cumsum(NewP)
   ## % Correct numerical errors in the calculations of zero rain rates.
-  ## NewP(round(NewP,8)==0) = 0; Single(round(Single,8)==0) = 0;
+  NewP[round(NewP, 8) == 0] = 0
+  Single[round(Single,8) == 0] = 0
   ## % Cut the vectors to the actual initial and final date.
-  ## nd = 1440/scale; % Number of intervals per day
-  ## DI = ceil(min(Event_Date)*nd)*scale; % Initial date in [min]
-  ## DF = ceil(max(Event_Date)*nd)*scale; % Final date in [min]
-  ## CumP(NewDate<DI | NewDate>DF) = [];
-  ## NewP(NewDate<DI | NewDate>DF) = [];
-  ## Single(NewDate<DI | NewDate>DF) = [];
-  ## NewDate(NewDate<DI | NewDate>DF) = [];
-  ## NewDate = NewDate/1440; % Rescale the date
+  nd = 1440 / scale # % Number of intervals per day
+  DI = ceiling(min(Event_Date) * nd) * scale # % Initial date in [min]
+  DF = ceiling(max(Event_Date) * nd) * scale # % Final date in [min]
+  CumP[NewDate < DI | NewDate > DF] = NA
+  NewP[NewDate < DI | NewDate > DF] = NA
+  Single[NewDate < DI | NewDate > DF] = NA
+  NewDate[NewDate < DI | NewDate > DF] = NA
+  NewDate = NewDate / 1440 # % Rescale the date
   ## % Example (or validation) for 1 minute aggregation.
   ## % NewDate = NewDate_1min/1440;
   ## % CumP = CumP_1min;
   ## % NewP = [CumP(1);diff(CumP)];
 
+  ## TODO - how we do this section depends a lot on the above implementation
   ## % Restoring dates to date format
   ## NewDate = datetime(NewDate,'ConvertFrom','datenum');
-  ## % Placing data gaps again in the aggregated vectors.
+  ## ## % Placing data gaps again in the aggregated vectors.
   ## for i = 1:size(Voids,1)
   ##     CumP(NewDate>Voids(i,1) & NewDate<Voids(i,2)) = NaN;
   ##     NewP(NewDate>Voids(i,1) & NewDate<Voids(i,2)) = NaN;
@@ -798,60 +732,3 @@ intCorrection <- function(r1m, y, Lowint, halves, x, x1m) {
   NULL
 }
 
-## aggregation_cs <- function(x, target_resolution) {
-##   ## TODO this should be a method for rain_gauge objects
-##   ## User-defined variables:
-##   minimum_intensity = 0.2 / 1 # i.e. 0.2mm over 1 hour
-##   maximum_intensity = 127     # i.e. 127mm over 1 hour
-##   mean_intensity = 3          # i.e. 3mm over 1 hour
-##   low_intensity = min(0.1/60, minimum_intensity / 120)
-##   ## "Move date by 0.25 seconds to avoid numerical or exportation errors"
-##   ## TODO
-##   ## Do not aggregate at 1-min before interpolation
-##   ## mintip = TRUE
-##   ## Add zero rates at estimated event endpoints
-##   ## halves = TRUE
-##   ## Identify data gaps [Matlab code does this by plotting - I could do something better like printing warning message - advising users to plot?]
-##   ## ## Initially set NA to 0
-##   ## x = x %>% replace_na(list(event = 0))
-##   ## Delete 0 events to help process relevant data only.
-##   x = x %>% filter(!is.na(event))
-
-##   ## PREPROCESS RAINFALL EVENTS
-##   nd = 1440 # Number of minutes per day or numeric value of 1 minute
-##   max_tip_interval = 60 * (1 / nd) * bucket / min_intensity
-##   min_tip_interval = 60 * (1 / nd) * bucket / max_intensity
-##   ## Aggregate events to avoid large intensities
-##   if (mintip) {
-##     ## Aggregate data at 1-min scale
-##     ## TODO AggregateEvents(...)
-##     ## TODO MergeEvents(...)
-##   }
-##   ## Adding a supporting initial extreme to avoid crashing the code later
-##   ## NewEvent_Date = cat(1,Event_Date(1)-MaxT,NewEvent_Date);
-##   ## NewEvent_mm = cat(1,0,NewEvent_mm);
-##   ## Redistribute rainfall tips occurring at relatively long periods
-##   ## TODO DivideEvents(..., MaxT)
-##   ## Redistribute rainfall over relatively long periods slightly shorter.
-##   ## TODO DivideEvents(..., MaxT / 2)
-##   ## Remove initial extreme to avoid crashing the code later.
-##   ## NewEvent_Date(1) = [];
-##   ## NewEvent_mm(1) = [];
-##   intervals = int_length(int_diff(times)) # TODO add to rain_gauge
-##   ## Array containing the event pointers
-##   idx = which(c(TRUE, intervals > max_tip_interval))
-##   ## Number of elements per event
-##   n = diff(idx) - 1 # TODO check this works as expected
-##   n_last = length(event) - rev(idx)[1]
-##   n = c(n, n_last)
-##   ## Duration of the events in minutes
-##   duration = (times[idx[2:end] - 1] - times[idx[1:end-1]]) * 1440
-##   duration_last = times[end] - times[idx[end]]
-##   n1 = index[n < 1] # index of events with only 1 point
-##   ## TODO logging
-##   ## fprintf('Number of rainfall events identified: %6i.\n',length(indx))
-##   ## fprintf('Average duration of the events: %8.2f min.\n',mean(D(D>0)))
-##   ## fprintf('Rainfall events consisting of 1 tip only: %6i.\n',length(n1))
-##   ## % fprintf('\n')
-##   ## and so on...
-## }
