@@ -118,13 +118,10 @@ aggregation_cs <- function(Event_Date, Event_mm, scale, bucket, mintip, halves, 
   x <- readr::read_csv(file)
   tz <- "Etc/GMT-5"
   try(tz <- lutz::tz_lookup_coords(lat, lon, method = "accurate"), silent = TRUE)
-  Event_Date <- x[["Date"]] %>% as.POSIXct(tz = tz, format = "%d/%m/%Y %H:%M:%S")
+  options(digits.secs = 6)
+  Event_Date <- x[["Date"]] %>% as.POSIXct(tz = tz, format = "%d/%m/%Y %H:%M:%OS")
   Event_mm <- x[["Event mm"]]
   Event_mm <- remove_consecutive_tips(Event_mm, Event_Date)
-  scale = 15 # 15-minute intervals
-  bucket = 0.2
-  mintip = TRUE
-  halves = TRUE
 
   ## %% USER-DEFINED VARIABLES
   ## % Minimum intensity to separate events: 0.2 mm h^-1 [Padron et al, 2015].
@@ -138,9 +135,8 @@ aggregation_cs <- function(Event_Date, Event_mm, scale, bucket, mintip, halves, 
   ## % 0.10 mm h^{-1} [Wang et al, 2008] or 1/2 Minint.
   Lowint = min(0.1/60,Minint/120); # % [mm min^{-1}]
   ## % Move date by 0.25 seconds to avoid numerical or exportation errors.
-  Event_Date = Event_Date - 0.25/86400;
+  Event_Date = Event_Date - seconds(0.25) #0.25/86400;
   ## % Event_Date = Event_Date + 0.25/86400;
-  stop()
   ## % Add zero rates at estimated initial and final event times, using (Vb/2):
   ## % 1 half rate and 1 half partial tip [Sadler and Busscher, 1989].
   ## % halves = true; % [default: true]
@@ -150,7 +146,7 @@ aggregation_cs <- function(Event_Date, Event_mm, scale, bucket, mintip, halves, 
   ## fprintf('RAINFALL AGGREGATION USING CUBIC SPLINE INTERPOLATION.\n')
   scale = 1
   bucket = 0.2
-  Event_mm = bucket * rep(1, length(Event_Date))
+  ## Event_mm = bucket * rep(1, length(Event_Date))
   mintip = TRUE
   halves = TRUE
   ## if nargin < 2 || isempty(Event_mm)
@@ -191,20 +187,13 @@ aggregation_cs <- function(Event_Date, Event_mm, scale, bucket, mintip, halves, 
   ##     [Voids] = iMHEA_Voids(Event_Date,Event_mm,1);
   ## end
 
-  ## %% TRANFORM DATES TO NUMBERS FOR EASIER PROCESSING
+  ## %% TRANFORM DATES TO NUMBERS FOR EASIER PROCESSING - TODO check if necessary
   ## % Modified variables to process.
-  Event_Date = Event_Date # datenum(Event_Date)
+  ## Event_Date = Event_Date # datenum(Event_Date)
   NewEvent_Date = Event_Date
   NewEvent_mm = Event_mm
+  NewEvent_Date = NewEvent_Date[!is.na(NewEvent_mm)]
   NewEvent_mm = NewEvent_mm[!is.na(NewEvent_mm)]
-  ## Event_Date = datenum(Event_Date);
-  ## NewEvent_Date = datenum(Event_Date);
-  ## NewEvent_mm = Event_mm;
-  ## % Allocate 0 mm to data gaps temporarily.
-  ## NewEvent_mm(isnan(Event_mm)) = 0;
-  ## % Delete zero events to help process relevant data only.
-  ## NewEvent_Date(NewEvent_mm==0) = [];
-  ## NewEvent_mm(NewEvent_mm==0) = [];
 
   ## %% PREPROCESS RAINFALL EVENTS
   nd = 1440; # % Number of minutes per day or numeric value of 1 minute: 1/1440
@@ -213,6 +202,7 @@ aggregation_cs <- function(Event_Date, Event_mm, scale, bucket, mintip, halves, 
   ## % Minimum tip interval to merge events.
   MinT = 60 * (1 / nd) * bucket / Maxint;
   ## % Aggregate events to avoid large intensities
+  stop()
   if (mintip) {
     ## % Aggregate data at 1-min scale.
     AggregateEvents(NewEvent_Date, NewEvent_mm, MinT)
@@ -572,19 +562,25 @@ aggregate_events <- function(Event_Date, Event_mm) {
   k = length(Event_mm); # % Length of input data
   nd = 1440; # % Number of minutes per day or numeric value of 1 minute: 1/1440
   ## % Build a 1 minute cumulative rainfall curve
-  DI = floor(min(Event_Date))*nd; # % Initial date [day]
-  DF = ceil(max(Event_Date))*nd; # % Final date [day]
-  NewDate_1min = seq(DI, DF, by=1)
+  DI = floor_date(min(Event_Date), unit = "minute")
+  DF = ceiling_date(max(Event_Date), unit = "minute")
+  NewDate_1min = seq(DI, DF, by = "1 min")
+
+  ## Use floor_date to round down, group by time, summarize by adding
+
+  ## DI = floor(min(Event_Date))*nd; # % Initial date [day]
+  ## DF = ceil(max(Event_Date))*nd; # % Final date [day]
+  ## NewDate_1min = seq(DI, DF, by=1)
   ## NewDate_1min = (DI:DF)'; % Equally spaced time interval
   n = length(NewDate_1min); # % Number of 1-min intervals
   NewP_1min = rep(0, length(NewDate_1min))
-  ## NewP_1min = zeros(size(NewDate_1min)); # % Initialise aggregation
-  if (nd * Event_Date[1] == NewDate_1min[1]) {
-    j = 2 # Data counter
-    NewP_1min[1] = Event_mm[1]
-  } else {
-    j = 1 # Data counter
-  }
+  ## ## NewP_1min = zeros(size(NewDate_1min)); # % Initialise aggregation
+  ## if (nd * Event_Date[1] == NewDate_1min[1]) {
+  ##   j = 2 # Data counter
+  ##   NewP_1min[1] = Event_mm[1]
+  ## } else {
+  ##   j = 1 # Data counter
+  ## }
   for (i in 2:n) {
     ## Aggregate values
     while (j <= k & nd * Event_Date[j] <= NewDate_1min[i]) {
