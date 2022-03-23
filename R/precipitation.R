@@ -197,19 +197,27 @@ aggregation_cs <- function(Event_Date, Event_mm, scale, bucket, mintip, halves, 
 
   ## %% PREPROCESS RAINFALL EVENTS
   nd = 1440; # % Number of minutes per day or numeric value of 1 minute: 1/1440
-  ## % Maximum tip interval to separate events.
-  MaxT = 60 * (1 / nd) * bucket / Minint;
+  ## Maximum tip interval to separate events.
+  ## N.B.
+  ## * [bucket / Minint] gives the minimum time between tips in hours
+  ## * multiplying by [60 * (1 / nd)] converts to days
+  ## * we actually want the units in seconds, so instead of multiplying by [60 * (1 / nd)], we multiply by 3600
+  ## MaxT = 60 * (1 / nd) * bucket / Minint;
+  ## ## % Minimum tip interval to merge events.
+  ## MinT = 60 * (1 / nd) * bucket / Maxint;
+  MaxT = 60 * 60 * (bucket / Minint)
   ## % Minimum tip interval to merge events.
-  MinT = 60 * (1 / nd) * bucket / Maxint;
+  MinT = 60 * 60 * (bucket / Maxint)
   ## % Aggregate events to avoid large intensities
-  stop()
   if (mintip) {
-    ## % Aggregate data at 1-min scale.
-    AggregateEvents(NewEvent_Date, NewEvent_mm, MinT)
+    ## Aggregate data at 1-min scale.
+    x = aggregate_events(NewEvent_Date, NewEvent_mm)
   } else {
     ## % Merge rainfall tips occurring at extremely short periods.
-    MergeEvents(NewEvent_Date, NewEvent_mm, MinT)
+    x = merge_events(NewEvent_Date, NewEvent_mm, MinT)
   }
+  ## TODO work with dataframes throughout
+  NewEvent_Date = x$Date; NewEvent_mm = x$Prec
   ## if mintip == true
   ##     % Aggregate data at 1-min scale.
   ##     [NewEvent_Date,NewEvent_mm] = AggregateEvents(NewEvent_Date,NewEvent_mm);
@@ -218,7 +226,8 @@ aggregation_cs <- function(Event_Date, Event_mm, scale, bucket, mintip, halves, 
   ##     [NewEvent_Date,NewEvent_mm] = MergeEvents(NewEvent_Date,NewEvent_mm,MinT);
   ## end
   ## % Adding a supporting initial extreme to avoid crashing the code later.
-  NewEvent_Date = c(Event_Date[1] - MaxT, NewEvent_Date)
+  stop()
+  NewEvent_Date = c(Event_Date[1] - seconds(MaxT), NewEvent_Date)
   NewEvent_mm = c(0, NewEvent_mm)
   ## NewEvent_Date = cat(1,Event_Date(1)-MaxT,NewEvent_Date);
   ## NewEvent_mm = cat(1,0,NewEvent_mm);
@@ -558,55 +567,55 @@ aggregation_cs <- function(Event_Date, Event_mm, scale, bucket, mintip, halves, 
 }
 
 aggregate_events <- function(Event_Date, Event_mm) {
-  ## % Agregate rainfall at 1-min intervals.
-  k = length(Event_mm); # % Length of input data
-  nd = 1440; # % Number of minutes per day or numeric value of 1 minute: 1/1440
-  ## % Build a 1 minute cumulative rainfall curve
-  DI = floor_date(min(Event_Date), unit = "minute")
-  DF = ceiling_date(max(Event_Date), unit = "minute")
-  NewDate_1min = seq(DI, DF, by = "1 min")
-
-  ## Use floor_date to round down, group by time, summarize by adding
-
-  ## DI = floor(min(Event_Date))*nd; # % Initial date [day]
-  ## DF = ceil(max(Event_Date))*nd; # % Final date [day]
-  ## NewDate_1min = seq(DI, DF, by=1)
-  ## NewDate_1min = (DI:DF)'; % Equally spaced time interval
-  n = length(NewDate_1min); # % Number of 1-min intervals
-  NewP_1min = rep(0, length(NewDate_1min))
-  ## ## NewP_1min = zeros(size(NewDate_1min)); # % Initialise aggregation
-  ## if (nd * Event_Date[1] == NewDate_1min[1]) {
-  ##   j = 2 # Data counter
-  ##   NewP_1min[1] = Event_mm[1]
-  ## } else {
-  ##   j = 1 # Data counter
+  ## Agregate rainfall at 1-min intervals.
+  ## DI = floor_date(min(Event_Date), unit = "minute")
+  ## DF = ceiling_date(max(Event_Date), unit = "minute")
+  ## NewDate_1min = seq(DI, DF, by = "1 min")
+  x =
+    tibble(Date = Event_Date, Prec = Event_mm) %>%
+    mutate(Date = floor_date(Event_Date, unit = "minute")) %>%
+    group_by(Date) %>%
+    summarise(Event_mm = sum(Event_mm))
+  x
+  ## ## DI = floor(min(Event_Date))*nd; # % Initial date [day]
+  ## ## DF = ceil(max(Event_Date))*nd; # % Final date [day]
+  ## ## NewDate_1min = seq(DI, DF, by=1)
+  ## ## NewDate_1min = (DI:DF)'; % Equally spaced time interval
+  ## n = length(NewDate_1min); # % Number of 1-min intervals
+  ## NewP_1min = rep(0, length(NewDate_1min))
+  ## ## ## NewP_1min = zeros(size(NewDate_1min)); # % Initialise aggregation
+  ## ## if (nd * Event_Date[1] == NewDate_1min[1]) {
+  ## ##   j = 2 # Data counter
+  ## ##   NewP_1min[1] = Event_mm[1]
+  ## ## } else {
+  ## ##   j = 1 # Data counter
+  ## ## }
+  ## for (i in 2:n) {
+  ##   ## Aggregate values
+  ##   while (j <= k & nd * Event_Date[j] <= NewDate_1min[i]) {
+  ##     NewP_1min[i] = NewP_1min[i] + Event_mm[j]
+  ##     j = j+1
+  ##   }
   ## }
-  for (i in 2:n) {
-    ## Aggregate values
-    while (j <= k & nd * Event_Date[j] <= NewDate_1min[i]) {
-      NewP_1min[i] = NewP_1min[i] + Event_mm[j]
-      j = j+1
-    }
-  }
-  ## if nd*Event_Date(1)==NewDate_1min(1)
-  ##     j = 2; % Data counter
-  ##     NewP_1min(1) = Event_mm(1);
-  ## else
-  ##     j = 1; % Data counter
-  ## end
-  ## for i = 2:n
-  ##     % Aggregate values.
-  ##     while j<=k && nd*Event_Date(j)<=NewDate_1min(i) % && nd*Event_Date(j)>NewDate_1min(i-1)
-  ##         NewP_1min(i) = NewP_1min(i) + Event_mm(j);
-  ##         j = j+1;
-  ##     end
-  ## end
-  NewDate_1min = NewDate_1min/nd; # % Rescale the date
-  ## % Delete zero events to help process relevant data only.
-  NewDate_1min = NewDate_1min[!NewDate_1min == 0]
-  NewP_1min = NewP_1min[!NewP_1min == 0]
-  ## NewDate_1min(NewP_1min==0) = [];
-  ## NewP_1min(NewP_1min==0) = [];
+  ## ## if nd*Event_Date(1)==NewDate_1min(1)
+  ## ##     j = 2; % Data counter
+  ## ##     NewP_1min(1) = Event_mm(1);
+  ## ## else
+  ## ##     j = 1; % Data counter
+  ## ## end
+  ## ## for i = 2:n
+  ## ##     % Aggregate values.
+  ## ##     while j<=k && nd*Event_Date(j)<=NewDate_1min(i) % && nd*Event_Date(j)>NewDate_1min(i-1)
+  ## ##         NewP_1min(i) = NewP_1min(i) + Event_mm(j);
+  ## ##         j = j+1;
+  ## ##     end
+  ## ## end
+  ## NewDate_1min = NewDate_1min/nd; # % Rescale the date
+  ## ## % Delete zero events to help process relevant data only.
+  ## NewDate_1min = NewDate_1min[!NewDate_1min == 0]
+  ## NewP_1min = NewP_1min[!NewP_1min == 0]
+  ## ## NewDate_1min(NewP_1min==0) = [];
+  ## ## NewP_1min(NewP_1min==0) = [];
   ## fprintf('Routine for aggregating tips at 1-min time interval.\n')
   ## fprintf('New number of data points: %4i.\n',length(NewP_1min))
   ## fprintf('Rainfall volume before aggregation: %8.2f mm.\n',nansum(Event_mm))
@@ -615,41 +624,67 @@ aggregate_events <- function(Event_Date, Event_mm) {
 }
 
 merge_events <- function(Event_Date, Event_mm, MinT) {
-  ## % Delete tips for small periods.
-  ## % Calculate the time between tips.
-  ## Diff_Event_Date = diff(Event_Date);
-  ## % Identify tips separated by less than the minimum time MinT.
-  ## EventDiff = Diff_Event_Date <= MinT;
-  ## % Modified variables to process.
-  ## NewEvent_Date = Event_Date;
-  ## NewEvent_mm = Event_mm;
-  ## i = 0; j = 0; % Initialise counters
-  ## while any(EventDiff)
-  ##     % Reassign rainfall to the following interval.
-  ##     j = 1; n =length(NewEvent_Date);
-  ##     for i = 2:n
-  ##         j = j+1;  % Index for NewEvent_mm.
-  ##         % When the time between tips is less than MaxT.
-  ##         if EventDiff(i-1)
-  ##             % Aggregate the tip volume to the following time stamp.
-  ##             NewEvent_mm(j) = NewEvent_mm(j)+NewEvent_mm(j-1);
-  ##             % Include these data in the rainfall tip time series.
-  ##             NewEvent_mm(j-1) = [];
-  ##             NewEvent_Date(j-1) = [];
-  ##             j = j-1;
-  ##         end
-  ##     end
-  ##     % Calculate the time between tips.
-  ##     Diff_Event_Date = diff(NewEvent_Date);
-  ##     % Identify tips separated by less than the minimum time MinT.
-  ##     EventDiff = Diff_Event_Date <= MinT;
-  ## end
-  ## fprintf('Routine for merging tips occurring faster than MinT = %6.2f seconds.\n',MinT*86400)
-  ## fprintf('Number of tips removed: %4i.\n',i-j)
-  ## fprintf('Rainfall volume before merging: %8.2f mm.\n',nansum(Event_mm))
-  ## fprintf('Rainfall volume after merging: %8.2f mm.\n',nansum(NewEvent_mm))
-  ## fprintf('\n')
-  NULL
+  ## Delete tips for small periods.
+  x =
+    tibble(Date = Event_Date, Prec = Event_mm) %>%
+    mutate(
+      interval = c(int_length(int_diff(Date)), MinT * 100),
+      event_count = seq(1, n())
+    ) %>%
+    mutate(event_count = ifelse(interval < MinT, lead(event_count), event_count)) #%>%
+  x_merged =
+    x %>%
+    group_by(event_count) %>%
+    summarize(Prec = sum(Prec)) %>%
+    left_join(
+      x %>% dplyr::select(Date, event_count),
+      by = "event_count"
+    ) %>%
+    dplyr::select(Date, Prec, -event_count)
+  x_merged
+  ## ## Length of time between tips in seconds
+  ## Diff_Event_Date = int_length(int_diff(Event_Date))
+  ## EventDiff = which(Diff_Event_Date <= MinT)
+  ## NewEvent_Date = Event_Date
+  ## NewEvent_mm = Event_mm
+  ## ## Create a grouping variable
+  ## merged_events = seq(1, length(Event_Date))
+  ## merged_events[EventDiff] = NA
+
+  ## ## % Calculate the time between tips.
+  ## ## Diff_Event_Date = diff(Event_Date);
+  ## ## % Identify tips separated by less than the minimum time MinT.
+  ## ## EventDiff = Diff_Event_Date <= MinT;
+  ## ## % Modified variables to process.
+  ## ## NewEvent_Date = Event_Date;
+  ## ## NewEvent_mm = Event_mm;
+  ## ## i = 0; j = 0; % Initialise counters
+  ## ## while any(EventDiff)
+  ## ##     % Reassign rainfall to the following interval.
+  ## ##     j = 1; n =length(NewEvent_Date);
+  ## ##     for i = 2:n
+  ## ##         j = j+1;  % Index for NewEvent_mm.
+  ## ##         % When the time between tips is less than MaxT.
+  ## ##         if EventDiff(i-1)
+  ## ##             % Aggregate the tip volume to the following time stamp.
+  ## ##             NewEvent_mm(j) = NewEvent_mm(j)+NewEvent_mm(j-1);
+  ## ##             % Include these data in the rainfall tip time series.
+  ## ##             NewEvent_mm(j-1) = [];
+  ## ##             NewEvent_Date(j-1) = [];
+  ## ##             j = j-1;
+  ## ##         end
+  ## ##     end
+  ## ##     % Calculate the time between tips.
+  ## ##     Diff_Event_Date = diff(NewEvent_Date);
+  ## ##     % Identify tips separated by less than the minimum time MinT.
+  ## ##     EventDiff = Diff_Event_Date <= MinT;
+  ## ## end
+  ## ## fprintf('Routine for merging tips occurring faster than MinT = %6.2f seconds.\n',MinT*86400)
+  ## ## fprintf('Number of tips removed: %4i.\n',i-j)
+  ## ## fprintf('Rainfall volume before merging: %8.2f mm.\n',nansum(Event_mm))
+  ## ## fprintf('Rainfall volume after merging: %8.2f mm.\n',nansum(NewEvent_mm))
+  ## ## fprintf('\n')
+  ## NULL
 }
 
 divide_events <- function(Event_Date, Event_mm, MaxT) {
