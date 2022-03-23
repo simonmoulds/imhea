@@ -226,13 +226,13 @@ aggregation_cs <- function(Event_Date, Event_mm, scale, bucket, mintip, halves, 
   ##     [NewEvent_Date,NewEvent_mm] = MergeEvents(NewEvent_Date,NewEvent_mm,MinT);
   ## end
   ## % Adding a supporting initial extreme to avoid crashing the code later.
-  stop()
   NewEvent_Date = c(Event_Date[1] - seconds(MaxT), NewEvent_Date)
   NewEvent_mm = c(0, NewEvent_mm)
   ## NewEvent_Date = cat(1,Event_Date(1)-MaxT,NewEvent_Date);
   ## NewEvent_mm = cat(1,0,NewEvent_mm);
   ## % Redistribute rainfall tips occurring at relatively long periods.
-  DivideEvents(NewEvent_Date, NewEvent_mm, MaxT)
+  x = divide_events(NewEvent_Date, NewEvent_mm, MaxT)
+  NewEvent_Date = x$Date; NewEvent_mm = x$Prec
   ## [NewEvent_Date,NewEvent_mm] = DivideEvents(NewEvent_Date,NewEvent_mm,MaxT);
   ## % Redistribute rainfall over relatively long periods slightly shorter.
   ## % [NewEvent_Date,NewEvent_mm] = DivideEvents(NewEvent_Date,NewEvent_mm,MaxT/2);
@@ -241,6 +241,7 @@ aggregation_cs <- function(Event_Date, Event_mm, scale, bucket, mintip, halves, 
   ## NewEvent_mm(1) = [];
   NewEvent_Date = NewEvent_Date[2:length(NewEvent_Date)]
   NewEvent_mm = NewEvent_mm[2:length(NewEvent_mm)]
+  stop()
 
   ## if nargin > 6
   ##     % Plot the new half tips
@@ -575,7 +576,7 @@ aggregate_events <- function(Event_Date, Event_mm) {
     tibble(Date = Event_Date, Prec = Event_mm) %>%
     mutate(Date = floor_date(Event_Date, unit = "minute")) %>%
     group_by(Date) %>%
-    summarise(Event_mm = sum(Event_mm))
+    summarise(Prec = sum(Prec))
   x
   ## ## DI = floor(min(Event_Date))*nd; # % Initial date [day]
   ## ## DF = ceil(max(Event_Date))*nd; # % Final date [day]
@@ -688,39 +689,36 @@ merge_events <- function(Event_Date, Event_mm, MinT) {
 }
 
 divide_events <- function(Event_Date, Event_mm, MaxT) {
-  ## function [NewEvent_Date,NewEvent_mm] = DivideEvents(Event_Date,Event_mm,MaxT)
-  ## % Add additional tips for long periods [Wang et al, 2008].
-  ## % Calculate the time between tips.
-  ## Diff_Event_Date = diff(Event_Date);
-  ## % Identify tips separated by more than the maximum time MaxT.
-  ## EventDiff = Diff_Event_Date > MaxT;
-  ## % Redistribute rainfall over relatively long periods but lower than MaxT.
-  ## % but greater than half MaxT.
-  ## HalfEventDiff = Diff_Event_Date > MaxT/2;
-  ## % Modified variables to process.
-  ## NewEvent_Date = Event_Date;
-  ## NewEvent_mm = Event_mm;
-  ## j = 1;
-  ## for i = 2:length(EventDiff)
-  ##     j = j+1;  % Index for NewEvent_mm.
-  ##     % When the time between tips is between half and one complete MaxT.
-  ##     % Be aware that ~EventDiff(i-2) may conflict with i = 2.
-  ##     if HalfEventDiff(i-1) && ~EventDiff(i-1) && (~EventDiff(i) || ~EventDiff(i-2))
-  ##         % Divide the following tip volume in two and assign a time stamp.
-  ##         Halftip_mm = Event_mm(i)/2;
-  ##         t0 = Event_Date(i) - Diff_Event_Date(i-1)/2;
-  ##         % Include these data in the rainfall tip time series.
-  ##         NewEvent_Date = cat(1,NewEvent_Date(1:j-1),t0,NewEvent_Date(j:end));
-  ##         NewEvent_mm = cat(1,NewEvent_mm(1:j-1),Halftip_mm,Halftip_mm,NewEvent_mm(j+1:end));
-  ##         j = j+1;
-  ##     end
-  ## end
+  Event_Date = xx
+  Event_mm = yy
+  Event_Date = NewEvent_Date
+  Event_mm = NewEvent_mm
+  diff_event_date = int_length(int_diff(Event_Date))
+  event_diff = diff_event_date > MaxT
+  half_event_diff = diff_event_date > MaxT / 2
+  ## Redistribute rainfall over relatively long periods
+  ## i.e. lower than MaxT but greater than MaxT/2
+  NewEvent_Date = Event_Date
+  NewEvent_mm = Event_mm
+  j = 1
+  for (i in 2:length(event_diff)) {
+    j = j + 1
+    ## TODO check this index against MATLAB
+    if (half_event_diff[i-1] & !event_diff[i-1] & (!event_diff[i] | !isTRUE(event_diff[i-2]))) {
+      halftip_mm = Event_mm[i] / 2
+      t0 = Event_Date[i] - diff_event_date[i-1] / 2
+      ## Include these data in the rainfall tip time series
+      NewEvent_Date = c(NewEvent_Date[1:(j-1)], t0, NewEvent_Date[j:length(NewEvent_Date)])
+      NewEvent_mm = c(NewEvent_mm[1:(j-1)], halftip_mm, halftip_mm, NewEvent_mm[(j+1):length(NewEvent_mm)])
+      j = j + 1
+    }
+  }
   ## fprintf('Routine for spreading tips occurring between %6.2f and %6.2f minutes.\n',MaxT*1440/2,MaxT*1440)
   ## fprintf('Number of tips added: %4i.\n',j-i)
   ## fprintf('Rainfall volume before spreading: %8.2f mm.\n',nansum(Event_mm))
   ## fprintf('Rainfall volume after spreading: %8.2f mm.\n',nansum(NewEvent_mm))
   ## fprintf('\n')
-  NULL
+  tibble(Date = NewEvent_Date, Prec = NewEvent_mm)
 }
 
 intCorrection <- function(r1m, y, Lowint, halves, x, x1m) {
