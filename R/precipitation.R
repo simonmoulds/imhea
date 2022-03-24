@@ -241,8 +241,6 @@ aggregation_cs <- function(Event_Date, Event_mm, scale, bucket, mintip, halves, 
   ## NewEvent_mm(1) = [];
   NewEvent_Date = NewEvent_Date[2:length(NewEvent_Date)]
   NewEvent_mm = NewEvent_mm[2:length(NewEvent_mm)]
-  stop()
-
   ## if nargin > 6
   ##     % Plot the new half tips
   ##     plot(datetime(NewEvent_Date(NewEvent_mm~=bucket),'ConvertFrom','datenum'),...
@@ -254,16 +252,19 @@ aggregation_cs <- function(Event_Date, Event_mm, scale, bucket, mintip, halves, 
   ##     legend('location','SouthWest'); legend('boxoff')
   ## end
 
-  ## % Identify events from tips separated by more than the maximum time MaxT.
+  ## Identify events from tips separated by more than the maximum time MaxT.
   NewEventDiff = int_length(int_diff(NewEvent_Date)) > MaxT
-  NewEventDiff = c(TRUE, NewEventDiff)
+  NewEventDiff = c(TRUE, NewEventDiff) # Make first point the start of a new event
+  ## `indx` represents the index of each new event
   indx = which(NewEventDiff)
+  ## Number of elements per event
+  ## [assumption that events lasting longer than MaxT are in fact a separate event?]
   n = diff(indx) - 1
   n_last = length(NewEvent_Date) - rev(indx)[1]
   n = c(n, n_last)
-  ## Duration of the events in minutes.
+  ## Duration of the events in seconds
   n_indx = length(indx)
-  D = (NewEvent_Date[indx[2:n_indx] - 1] - NewEvent_Date[indx[1:(n_indx - 1)]]) * 1440
+  D = (NewEvent_Date[indx[2:n_indx] - 1] - NewEvent_Date[indx[1:(n_indx - 1)]]) #* 1440
   D_last = rev(NewEvent_Date)[1] - NewEvent_Date[indx[n_indx]]
   D = c(D, D_last)
   n1 = indx[n < 1] # Index of events with only 1 point
@@ -271,79 +272,16 @@ aggregation_cs <- function(Event_Date, Event_mm, scale, bucket, mintip, halves, 
   ## fprintf('Average duration of the events: %8.2f min.\n',mean(D(D>0)))
   ## fprintf('Rainfall events consisting of 1 tip only: %6i.\n',length(n1))
 
-  ## % Identify events from tips separated by more than the maximum time MaxT.
-  ## NewEventDiff = diff(NewEvent_Date) > MaxT;
-  ## NewEventDiff = cat(1,true,NewEventDiff);
-  ## % Array containing the event pointers.
-  ## indx = find(NewEventDiff);
-  ## % Number of elements per event.
-  ## n = diff(indx)-1;
-  ## n(end+1) = length(NewEvent_Date) - indx(end);
-  ## % Duration of the events in minutes.
-  ## D = (NewEvent_Date(indx(2:end)-1) - NewEvent_Date(indx(1:end-1)))*1440;
-  ## D(end+1) = NewEvent_Date(end) - NewEvent_Date(indx(end));
-  ## n1 = indx(n<1); % Index of events with only 1 point
-  ## fprintf('Number of rainfall events identified: %6i.\n',length(indx))
-  ## fprintf('Average duration of the events: %8.2f min.\n',mean(D(D>0)))
-  ## fprintf('Rainfall events consisting of 1 tip only: %6i.\n',length(n1))
-  ## % fprintf('\n')
-
-  ## %% FIT EVENTS AND AGGREGATING AT 1-min INTERVAL
-  ## % Build a 1 minute cumulative rainfall curve
-  DI = floor(min(Event_Date)) * nd # Initial date [day]
-  DF = ceiling(max(Event_Date)) * nd # Final date [day]
-  NewDate_1min = seq(DI, DF, 1)      # Equally spaced time interval
+  ## FIT EVENTS AND AGGREGATING AT 1-min INTERVAL
+  ## Build a 1 minute cumulative rainfall curve
+  DI = floor_date(min(Event_Date), unit = "minute")
+  DF = ceiling_date(max(Event_Date), unit = "minute")
+  NewDate_1min = seq(DI, DF, by = "1 min")
   CumP_1min = rep(0, length(NewDate_1min)) # Initialise accumulation
   Single_1min = rep(0, length(NewDate_1min)) # Initialise single tip counting
   biased = rep(0, length(n))                 # Initialise bias vector
   bEvent = rep(0, length(n))                 # Initialise biased events counter
-  ## DI = floor(min(Event_Date))*nd; % Initial date [day]
-  ## DF = ceil(max(Event_Date))*nd; % Final date [day]
-  ## NewDate_1min = (DI:DF)'; % Equally spaced time interval
-  ## CumP_1min = zeros(size(NewDate_1min)); % Initialise accumulation
-  ## Single_1min = zeros(size(NewDate_1min)); % Initialise single tip counting
-  ## biased = zeros(size(n)); % Initialise bias vector
-  ## bEvent = zeros(size(n)); % Initialise biased events counter.
-
-  for (i in 1:length(n)) {
-    ## % Events with more than 2 points (fit a CS) [Wang et al, 2008].
-    ## % Events with only 2 points (fit a line) [Ciach, 2003].
-    ## % Events with only 1 points (distribute at a rate of 3 mm h^{-1}) [Wang et al, 2008].
-    if (n[i] >= 1) {
-      ## % Relative time in seconds from the beggining of the event.
-      x = (NewEvent_Date(indx(i)+(0:n(i)))-NewEvent_Date(indx(i)))*86400;
-      ## % Cumulative rainfall during the event.
-      y = cumsum(NewEvent_mm(indx(i):indx(i)+n(i)));
-      if (halves != FALSE | halves != 0) {
-        ## % Estimate initial point of the rainfall event.
-        ## % Reduce half a sec only to ensure correct initial date calculation.
-        x0 = bucket * (x[2]-x[1])/(y[2]-y[1])-0.5;
-        xf = bucket * (x[end]-x[end-1])/(y[end]-y[end-1]);
-        ## % Allocate only 1-half tip at the start and end of event.
-        x = x + x0;
-        y = y - bucket / 2;
-        y = c(0, y, rev(y)[1] + bucket / 2)
-        x = c(0, x, rev(x)[1] + xf)
-        ## y = cat(1,0,y,y(end)+bucket/2);
-        ## x = cat(1,0,x,x(end)+xf);
-        x = round(x);
-        ## % Aggregating data at 1 min interval starting at :00.
-        DI = max(DI,floor((NewEvent_Date(indx(i))-x0/86400)*nd)); # % Initial date in [min]
-        DF = ceiling((NewEvent_Date(indx(i)+n(i))+xf/86400)*nd); # % Final date  in [min]
-        x1m = seq(DI, DF, 1) - NewEvent_Date[indx[i]] * nd + x0 / 60 # Equally spaced time interval
-        ## x1m = (DI:DF)' - NewEvent_Date(indx(i))*nd+x0/60; # % Equally spaced time interval.
-        x1m = round(60*x1m); # % Convert to seconds
-      } else {
-        ## % x0 = -0.5; % Only to ensure correct initial date calculation.
-        ## % Aggregating data at 1 min interval starting at :00.
-        DI = max(DI,floor((NewEvent_Date(indx(i))+0.5/86400)*nd)); # % Initial date in [min]
-        DF = ceiling(NewEvent_Date(indx(i)+n(i))*nd); # % Final date  in [min]
-        x1m = seq(DI, DF, 1) - NewEvent_Date[indx[i]] * nd # Equally spaced time interval
-        ## x1m = (DI:DF)' - NewEvent_Date(indx(i))*nd; # % Equally spaced time interval.
-        x1m = round(60*x1m); # % Convert to seconds
-      }
-    }
-  }
+  stop()
 
   for (i in 1:length(n)) {
     ## Procedure:
@@ -365,20 +303,22 @@ aggregation_cs <- function(Event_Date, Event_mm, scale, bucket, mintip, halves, 
         y = y - bucket / 2
         y = c(0, y, rev(y)[1] + bucket / 2)
         x = c(0, x, rev(x)[1] + xf)
-        x = round(x)
+        x = round(x) # TODO check - would floor/ceiling be better?
+
         ## Aggregating data at 1-min interval starting at :00
-        DI = max(DI, floor((NewEvent_Date[indx[i]] - x0 / 86400) * nd)) # Initial date in [min]
-        DF = ceiling((NewEvent_Date[indx[i] + n[i]] + xf / 86400) * nd)
-        x1m = (DI:DF) - NewEvent_Date[indx[i]] * nd + x0 / 60 # Equally spaced time interval
-        x1m = round(60 * x1m) # Convert to seconds
+        DI = max(DI, floor_date(NewEvent_Date[indx[i]] - x0, unit = "minute"))
+        DF = ceiling_date(NewEvent_Date[indx[i] + n[i]] + xf)
+        x1m = seq(DI, DF, by = "1 min") - NewEvent_Date[indx[i]] + x0 # Equally spaced time interval
+        ## x1m = round(60 * x1m) # Convert to seconds
       } else {
-        x0 = -0.5
+        ## x0 = -0.5
         ## Aggregating data at 1-min interval starting at :00
-        DI = max(DI, floor((NewEvent_Date[indx[i]] + 0.5 / 86400) * nd)) # Initial date in [min]
-        DF = ceiling(NewEvent_Date[indx[i] + n[i]] * nd)                 # Final date in [min]
-        x1m = DI:DF - NewEvent_Date[indx[i]] * nd                        # Equally spaced time interval
-        x1m = round(60 * x1m) # Convert to seconds
+        DI = max(DI, floor_date(NewEvent_Date[indx[i]] + seconds(0.5)))
+        DF = ceiling_date(NewEvent_Date[indx[i] + n[i]])
+        x1m = seq(DI, DF, by = "1 min") - NewEvent_Date[indx[i]]
+        ## x1m = round(60 * x1m) # Convert to seconds
       }
+      stop()
       ## % CS fitted to the current event and interpolated at 1-sec.
       ## % pp = spline(x,y); % yy = spline(x,y,xx);
       if (halves) {
