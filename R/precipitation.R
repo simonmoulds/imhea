@@ -277,11 +277,10 @@ aggregation_cs <- function(Event_Date, Event_mm, scale, bucket, mintip, halves, 
   DI = floor_date(min(Event_Date), unit = "minute")
   DF = ceiling_date(max(Event_Date), unit = "minute")
   NewDate_1min = seq(DI, DF, by = "1 min")
-  CumP_1min = rep(0, length(NewDate_1min)) # Initialise accumulation
+  CumP_1min = rep(0, length(NewDate_1min))   # Initialise accumulation
   Single_1min = rep(0, length(NewDate_1min)) # Initialise single tip counting
   biased = rep(0, length(n))                 # Initialise bias vector
   bEvent = rep(0, length(n))                 # Initialise biased events counter
-  stop()
 
   for (i in 1:length(n)) {
     ## Procedure:
@@ -290,7 +289,7 @@ aggregation_cs <- function(Event_Date, Event_mm, scale, bucket, mintip, halves, 
     ## % Events with only 1 points (distribute at a rate of 3 mm h^{-1}) [Wang et al, 2008].
     if (n[i] >= 1) {
       ## Relative time in seconds from the beginning of the event.
-      x = (NewEvent_Date[indx[i] + (0:n[i])] - NewEvent_Date[indx[i]]) * 86400
+      x = (NewEvent_Date[indx[i] + (0:n[i])] - NewEvent_Date[indx[i]])
       ## Cumulative rainfall during the event
       y = cumsum(NewEvent_mm[indx[i]:(indx[i] + n[i])])
       if (halves) {
@@ -318,23 +317,43 @@ aggregation_cs <- function(Event_Date, Event_mm, scale, bucket, mintip, halves, 
         x1m = seq(DI, DF, by = "1 min") - NewEvent_Date[indx[i]]
         ## x1m = round(60 * x1m) # Convert to seconds
       }
-      stop()
+
       ## % CS fitted to the current event and interpolated at 1-sec.
       ## % pp = spline(x,y); % yy = spline(x,y,xx);
+
+      ## ## Experimenting with pracma::cubicspline
+      ## ## Examples from https://uk.mathworks.com/help/matlab/ref/spline.html
+      ## x = c(0, 1, 2.5, 3.6, 5, 7, 8.1, 10)
+      ## y = sin(x)
+      ## xx = seq(0, 10, by=.25)
+      ## yy = cubicspline(x, y, xi=xx)
+
+      ## with endpoints:
+      ## x = seq(-4, 4, by = 1)
+      ## y = c(0, .15, 1.12, 2.36, 2.36, 1.46, .49, .06, 0)
+      ## xx = seq(-4, 4, length.out = 101)
+      ## yy = cubicspline(x, y, xi=xx, endp2nd = TRUE, der = c(0, 0)) # OK!
+      ## yy = spline(x, y, method='natural', xout=xx)
       if (halves) {
         ## % Set the estimated zero rate endpoints first derivatives to 0
         ## % [Sadler and Busscher, 1989].
-        pp = spline(x, c(0, y, 0)) # TODO check this
+        ## pp = spline(x, c(0, y, 0)) # TODO check this
+        y1m = ppval::cubicspline(x, y, xi=x1m, endp2nd = TRUE, der = c(0, 0))
       } else {
         ## % Set the endpoints second derivatives to 0 [Wang et al, 2008].
-        pp = csape(x, y, 'second') # TODO
+        ## N.B. a natural cubic spline is a cubic spline that sets second
+        ## derivatives to zero at the end points.
+        ## E.g. https://stats.stackexchange.com/q/322047
+        ## pp = csape(x, y, 'second') # TODO
+        y1m = spline(x, y, method = 'natural', xout = x1m)
       }
-      y1m = fnval(pp,x1m); # % Cumulative rainfall at each x1m TODO
+      ## y1m = fnval(pp,x1m); # % Cumulative rainfall at each x1m TODO
       if (halves) {
         ## % Zero rainfall rates at borders.
         y1m[1] = 0
         y1m[length(y1m)] = y1m[length(y1m) - 1]
       }
+      stop()
       ## r1m = [y1m(1);diff(y1m)]; % Rainfall rate at each x1m [mm min^{-1}]
       r1m = c(y1m[1], diff(y1m)) # Rainfall rate at each x1m [mm min^{-1}]
       ## % Correction for negative intensities and biased volumes.
@@ -629,10 +648,10 @@ merge_events <- function(Event_Date, Event_mm, MinT) {
 }
 
 divide_events <- function(Event_Date, Event_mm, MaxT) {
-  Event_Date = xx
-  Event_mm = yy
-  Event_Date = NewEvent_Date
-  Event_mm = NewEvent_mm
+  ## Event_Date = xx
+  ## Event_mm = yy
+  ## Event_Date = NewEvent_Date
+  ## Event_mm = NewEvent_mm
   diff_event_date = int_length(int_diff(Event_Date))
   event_diff = diff_event_date > MaxT
   half_event_diff = diff_event_date > MaxT / 2
