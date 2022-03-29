@@ -338,92 +338,111 @@ aggregation_cs <- function(Event_Date, Event_mm, scale, bucket, mintip, halves, 
         ## % Set the estimated zero rate endpoints first derivatives to 0
         ## % [Sadler and Busscher, 1989].
         ## pp = spline(x, c(0, y, 0)) # TODO check this
-        y1m = ppval::cubicspline(x, y, xi=x1m, endp2nd = TRUE, der = c(0, 0))
+        y1m = pracma::cubicspline(x, y, xi=as.numeric(x1m), endp2nd = TRUE, der = c(0, 0))
       } else {
         ## % Set the endpoints second derivatives to 0 [Wang et al, 2008].
         ## N.B. a natural cubic spline is a cubic spline that sets second
         ## derivatives to zero at the end points.
         ## E.g. https://stats.stackexchange.com/q/322047
         ## pp = csape(x, y, 'second') # TODO
+        ## y1m = spline(x, y, method = 'hyman', xout = x1m)
         y1m = spline(x, y, method = 'natural', xout = x1m)
       }
+      ## ## The above spline routines work as in the MATLAB original,
+      ## ## but can result in negative rainfall intensities. Using a
+      ## ## monotonic spline prevents this:
+      ## y1m = spline(c(x[1] - 60, x, rev(x)[1] + 60), c(y[1], y, rev(y)[1]), method = 'hyman', xout = x1m)
+
       ## y1m = fnval(pp,x1m); # % Cumulative rainfall at each x1m TODO
       if (halves) {
         ## % Zero rainfall rates at borders.
         y1m[1] = 0
         y1m[length(y1m)] = y1m[length(y1m) - 1]
       }
-      stop()
       ## r1m = [y1m(1);diff(y1m)]; % Rainfall rate at each x1m [mm min^{-1}]
-      r1m = c(y1m[1], diff(y1m)) # Rainfall rate at each x1m [mm min^{-1}]
+      r1m = compute_rainfall_intensity(y1m) # Rainfall rate at each x1m [mm min^{-1}]
       ## % Correction for negative intensities and biased volumes.
       ## TODO intCorrection(...)
+      r2m = r1m
+      bEvent = 0
+      bias = compute_bias(y, r1m)
+      bEvent = bias > 0.25
+      if (bEvent) {
+        y2m = correct_bias(x, y, x1m, r1m)
+        r2m = compute_rainfall_intensity(y2m)
+        bias = compute_bias(y, r2m)
+      }
+      r2m = correct_negative_rate(y, r2m, Lowint)
+      y2m = compute_cumulative_rainfall_curve(y, r2m, halves)
+      r2m = compute_rainfall_intensity(y2m)
       ## [r2m,y2m,biased(i),bEvent(i)] = intCorrection(r1m,y,Lowint,halves,x,x1m);
       ## Assemble cumulative rainfall curve
       ix = NewDate_1min >= DI & NewDate_1min <= DF
-      CumP_1min[ix] = CumP_1min + y2m
+      CumP_1min[ix] = CumP_1min[ix] + y2m
       CumP_1min[NewDate_1min > DF] = CumP_1min[NewDate_1min == DF]
-      if (any(is.nan(r2m))) {
-        ## Calculations for event plots
-        ## TODO
-        xx = 0:x[length(x)]
-        yy = fnval(pp, xx)
-        ## Aggregating data at 1-min interval
-        ## Alternatively starting at x[1]
-        x1m = 60 * (1:floor(length(xx) / 60)) - 1 # Equally spaced time interval
-        y1m = yy[60 * (1:floor(length(xx) / 60))]
-        r1m = 60 * (yy[60 * (1:floor(length(xx) / 60))] - yy[60 * (1:floor(length(xx) / 60)) - 59])
-        ## Linear sections of the current event and interpolated at 1-sec
-        y3m = interp1(x, y, x1m, 'linear', 0) # Cumulative rainfall at each x1m
-        if (halves) {
-          ## Zero rainfall rates at borders
-          y3m[1] = 0
-          y3m[length(y3m)] = y3m[length(y3m) - 1]
-        }
-        r3m = [y3m[1]:diff(y3m)] # Rainfall rate at each x1m [mm min^{-1}]
-        ## Correction for biased volumes TODO
-        ## [r4m,y4m] = intCorrection(r3m,y,Lowint,halves,x,x1m);
+      stop()
+      ## TODO [only needed for plotting]
+      ## if (any(is.nan(r2m))) {
+      ##   ## Calculations for event plots
+      ##   ## TODO
+      ##   xx = 0:x[length(x)]
+      ##   yy = fnval(pp, xx)
+      ##   ## Aggregating data at 1-min interval
+      ##   ## Alternatively starting at x[1]
+      ##   x1m = 60 * (1:floor(length(xx) / 60)) - 1 # Equally spaced time interval
+      ##   y1m = yy[60 * (1:floor(length(xx) / 60))]
+      ##   r1m = 60 * (yy[60 * (1:floor(length(xx) / 60))] - yy[60 * (1:floor(length(xx) / 60)) - 59])
+      ##   ## Linear sections of the current event and interpolated at 1-sec
+      ##   y3m = interp1(x, y, x1m, 'linear', 0) # Cumulative rainfall at each x1m
+      ##   if (halves) {
+      ##     ## Zero rainfall rates at borders
+      ##     y3m[1] = 0
+      ##     y3m[length(y3m)] = y3m[length(y3m) - 1]
+      ##   }
+      ##   r3m = [y3m[1]:diff(y3m)] # Rainfall rate at each x1m [mm min^{-1}]
+      ##   ## Correction for biased volumes TODO
+      ##   ## [r4m,y4m] = intCorrection(r3m,y,Lowint,halves,x,x1m);
 
-        ## Tip counting
-        r5m = rep(0, length(x1m)) # Initialize aggregation
-        p = c(y[1], diff(y))
-        if (x[1] == x1m[1]) {
-          j = 2 # Data counter
-          r5m[1] = p[1]
-        } else {
-          j = 1 # Data counter
-        }
-        for (itb in 2:length(x1m)) {
-          ## Aggregate values
-          while (j <= length(p) & x[j] > x1m[itb-1] & x[j] <= x1m[itb]) {
-            r5m[itb] = r5m[itb] + p[j]
-            j = j + 1
-          }
-        }
-        y5m = cumsum(r5m) # Accumulation
-        ## % Plot events.
-        ## figure(199)
-        ## subplot(2,1,1)
-        ## plot(x,y,'o',x1m,y5m,':',x1m,y4m,'-.',x1m,y1m,'-.',x1m,y2m,'-.')
-        ## set(gca,'Xlim',[-60 x(end)+60])
-        ## title(['Rainfall event number ',num2str(i)])
-        ## xlabel('Time in seconds from the beggining of the event [s]')
-        ## ylabel('Cumulative rainfall [mm]')
-        ## legend('Rain gauge tip','1-min tip counting','1-min linear corrected',...
-        ##     '1-min CS interpolated','1-min CS corrected',...
-        ##     'location','NorthWest')
-        ## legend('boxoff')
-        ## subplot(2,1,2)
-        ## plot(x,60*[y(1);diff(y)],'o',x1m,60*r5m,':',x1m,60*r4m,'-.',x1m,60*r1m,'-.',x1m,60*r2m,'-.')
-        ## set(gca,'Xlim',[-60 x(end)+60])
-        ## xlabel('Time in seconds from the beggining of the event [s]')
-        ## ylabel('Rainfall rate [mm h^{-1}]')
-        ## legend('Rain gauge tip','1-min tip counting','1-min linear corrected',...
-        ##     '1-min CS interpolated','1-min CS corrected',...
-        ##     'location','NorthWest')
-        ## legend('boxoff')
-        ## % Add breakpoint to check plots.
-      }
+      ##   ## Tip counting
+      ##   r5m = rep(0, length(x1m)) # Initialize aggregation
+      ##   p = c(y[1], diff(y))
+      ##   if (x[1] == x1m[1]) {
+      ##     j = 2 # Data counter
+      ##     r5m[1] = p[1]
+      ##   } else {
+      ##     j = 1 # Data counter
+      ##   }
+      ##   for (itb in 2:length(x1m)) {
+      ##     ## Aggregate values
+      ##     while (j <= length(p) & x[j] > x1m[itb-1] & x[j] <= x1m[itb]) {
+      ##       r5m[itb] = r5m[itb] + p[j]
+      ##       j = j + 1
+      ##     }
+      ##   }
+      ##   y5m = cumsum(r5m) # Accumulation
+      ##   ## % Plot events.
+      ##   ## figure(199)
+      ##   ## subplot(2,1,1)
+      ##   ## plot(x,y,'o',x1m,y5m,':',x1m,y4m,'-.',x1m,y1m,'-.',x1m,y2m,'-.')
+      ##   ## set(gca,'Xlim',[-60 x(end)+60])
+      ##   ## title(['Rainfall event number ',num2str(i)])
+      ##   ## xlabel('Time in seconds from the beggining of the event [s]')
+      ##   ## ylabel('Cumulative rainfall [mm]')
+      ##   ## legend('Rain gauge tip','1-min tip counting','1-min linear corrected',...
+      ##   ##     '1-min CS interpolated','1-min CS corrected',...
+      ##   ##     'location','NorthWest')
+      ##   ## legend('boxoff')
+      ##   ## subplot(2,1,2)
+      ##   ## plot(x,60*[y(1);diff(y)],'o',x1m,60*r5m,':',x1m,60*r4m,'-.',x1m,60*r1m,'-.',x1m,60*r2m,'-.')
+      ##   ## set(gca,'Xlim',[-60 x(end)+60])
+      ##   ## xlabel('Time in seconds from the beggining of the event [s]')
+      ##   ## ylabel('Rainfall rate [mm h^{-1}]')
+      ##   ## legend('Rain gauge tip','1-min tip counting','1-min linear corrected',...
+      ##   ##     '1-min CS interpolated','1-min CS corrected',...
+      ##   ##     'location','NorthWest')
+      ##   ## legend('boxoff')
+      ##   ## % Add breakpoint to check plots.
+      ## }
     } else {
       ## Aggregating data at 1-min interval starting at :00
       x0 = NewEvent_mm[indx[i]] / Meanint * 60 - 1 # Time interval in [min]
@@ -525,6 +544,7 @@ aggregation_cs <- function(Event_Date, Event_mm, scale, bucket, mintip, halves, 
   ## fprintf('Rainfall volume after aggregation: %8.2f mm.\n',nansum(NewP))
   ## fprintf('\n')
 }
+
 
 aggregate_events <- function(Event_Date, Event_mm) {
   ## Agregate rainfall at 1-min intervals.
@@ -680,43 +700,96 @@ divide_events <- function(Event_Date, Event_mm, MaxT) {
   tibble(Date = NewEvent_Date, Prec = NewEvent_mm)
 }
 
+compute_bias <- function(y, r1m) {
+  abs(rev(y)[1] - sum(r1m[r1m > 0])) / rev(y)[1]
+}
+
+correct_bias <- function(x, y, x1m, r1m) {
+  ## Use linear interpolation instead
+  y2m = approx(x, y, x1m, rule=1)
+  if (halves) {
+    ## Zero rainfall rates at borders
+    y2m[1] = 0
+    y2m[length(y2m)] = rev(y2m)[2]
+  }
+  y2m
+}
+
+compute_rainfall_intensity <- function(y1m) {
+  c(y1m[1], diff(y1m))
+}
+
+correct_negative_rate <- function(y, r1m, Lowint) {
+  iter = 0
+  while (iter <= 10 & (abs(rev(y)[1] - sum(r1m)) > Lowint | any(round(r1m[r1m != 0], digits = 8) < Lowint))) {
+    iter = iter + 1
+    r1m[r1m < 0] = 0 # Set negative rainfall rates to zero
+    r1m[r1m > 0 & r1m < Lowint] = Lowint # Replace the lowest rates
+    r1m[r1m >= Lowint] = r1m[r1m >= Lowint] * (rev(y)[1] - sum(r1m[r1m < Lowint])) / (sum(r1m) - sum(r1m[r1m < Lowint])) # Correction of biased rainfall
+  }
+  r1m
+}
+
+compute_cumulative_rainfall_curve <- function(y, r1m, halves) {
+  ## Calculate the cumulative rainfall curve
+  y2m = cumsum(r1m)
+  ## Correct slight differences in totals
+  y2m[length(y2m)] = rev(y)[1]
+  if (halves) {
+    ## Zero rainfall rates at borders
+    y2m[length(y2m) - 1] = rev(y)[1]
+  }
+  y2m
+  ## ## Recalculate the intensities
+  ## r1m = c(y2m[1], diff(y2m))
+  ## r1m
+}
+
 intCorrection <- function(r1m, y, Lowint, halves, x, x1m) {
   ## function [r2m,y2m,biased,bEvent] = intCorrection(r1m,y,Lowint,halves,x,x1m)
   ## % Only keep rain rates above the threshold.
-  ## r2m = r1m;
-  ## bEvent = 0;
-  ## biased = abs(y(end)-sum(r1m(r1m>0)))/y(end);
-  ## if biased > 0.25
-  ##     bEvent = 1;
-  ##     % Use linear interpolation instead
-  ##     y2m = interp1(x,y,x1m,'linear',0); % Cumulative rainfall at each x1m
-  ##     if halves ~= false || halves ~= 0
-  ##         % Zero rainfall rates at borders.
-  ##         y2m(1) = 0; y2m(end) = y2m(end-1);
-  ##     end
-  ##     r2m = [y2m(1);diff(y2m)]; % Rainfall rate at each x1m [mm min^{-1}]
-  ##     biased = abs(y(end)-sum(r2m(r2m>0)))/y(end);
-  ##     % Correction for negative intensities and biased volumes.
-  ## end
-  ## iter = 0;
-  ## while iter<= 10 && (abs(y(end)-sum(r2m))>Lowint || any(round(r2m(r2m~=0),8) < Lowint))
-  ##     iter = iter + 1;
-  ##     r2m(r2m < 0) = 0; % Set the negative rainfall rates to zero
-  ##     r2m(r2m > 0 & r2m < Lowint) = Lowint; % Replace the lowest rates
-  ##     r2m(r2m >= Lowint) = r2m(r2m >= Lowint)*...
-  ##         (y(end)-sum(r2m(r2m < Lowint)))/...
-  ##         (sum(r2m)-sum(r2m(r2m < Lowint))); % Correction of biased rainfall
-  ## end
-  ## % Calculate the cumulative rainfall curve.
-  ## y2m = cumsum(r2m);
-  ## % Correct slight differences in totals.
-  ## y2m(end) = y(end);
-  ## if halves ~= false || halves ~= 0
-  ##     % Zero rainfall rates at borders.
-  ##     y2m(end-1) = y(end);
-  ## end
-  ## ## % Recalculate the intensities.
-  ## r2m = [y2m(1);diff(y2m)];
-  NULL
+  r2m = r1m
+  bEvent = 0
+  bias = compute_bias(y, r1m)
+  bEvent = bias > 0.25
+  if (bEvent) {
+    y2m = correct_bias(x, y, x1m, r1m)
+    r2m = compute_rainfall_intensity(y2m)
+    bias = compute_bias(y, r2m)
+  }
+  r2m = correct_negative_rate(y, r2m, Lowint)
+  y2m = compute_cumulative_rainfall_curve(y, r2m, halves)
+  r2m = compute_rainfall_intensity(y2m)
+  ## if (biased > 0.25) {
+  ##   bEvent = 1
+  ##   ## Use linear interpolation instead
+  ##   y2m = approx(x, y, x1m, rule=1)
+  ##   if (halves) {
+  ##     ## Zero rainfall rates at borders
+  ##     y2m[1] = 0
+  ##     y2m[length(y2m)] = rev(y2m)[2]
+  ##   }
+  ##   ## Rainfall rate at each x1m
+  ##   r2m = c(y2m[1], diff(y2m))
+  ##   ## Recalculate bias
+  ##   biased = compute_bias(y, r2m)
+  ## }
+  ## iter = 0
+  ## while (iter <= 10 & (abs(rev(y)[1] - sum(r2m)) > Lowint | any(round(r2m[r2m != 0], digits = 8) < Lowint))) {
+  ##   iter = iter + 1
+  ##   r2m[r2m < 0] = 0 # Set negative rainfall rates to zero
+  ##   r2m[r2m > 0 & r2m < Lowint] = Lowint # Replace the lowest rates
+  ##   r2m[r2m >= Lowint] = r2m[r2m >= Lowint] * (rev(y)[1] - sum(r2m[r2m < Lowint])) / (sum(r2m) - sum(r2m[r2m < Lowint])) # Correction of biased rainfall
+  ## }
+  ## ## Calculate the cumulative rainfall curve
+  ## y2m = cumsum(r2m)
+  ## ## Correct slight differences in totals
+  ## y2m[length(y2m)] = rev(y)[1]
+  ## if (halves) {
+  ##   ## Zero rainfall rates at borders
+  ##   y2m[length(y2m) - 1] = rev(y)[1]
+  ## }
+  ## ## Recalculate the intensities
+  ## r2m = c(y2m[1], diff(y2m))
+  ## list(r2m = r2m, y2m = y2m$y, biased = biased, bEvent = bEvent)
 }
-
