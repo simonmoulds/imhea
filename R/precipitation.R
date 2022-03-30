@@ -444,13 +444,31 @@ aggregation_cs <- function(Event_Date, Event_mm, scale, bucket, mintip, halves, 
       ##   ## % Add breakpoint to check plots.
       ## }
     } else {
+      ## x0 = bucket * (x[2] - x[1]) / (y[2] - y[1]) - 0.5
+      ## xf = bucket * (rev(x)[1] - rev(x)[2]) / (rev(y)[1] - rev(y)[2])
+      ## ## Allocate only 1-half tip at the start and end of event
+      ## x = x + x0
+      ## y = y - bucket / 2
+      ## y = c(0, y, rev(y)[1] + bucket / 2)
+      ## x = c(0, x, rev(x)[1] + xf)
+      ## x = round(x) # TODO check - would floor/ceiling be better?
+
+      ## ## Aggregating data at 1-min interval starting at :00
+      ## DI = max(DI, floor_date(NewEvent_Date[indx[i]] - x0, unit = "minute"))
+      ## DF = ceiling_date(NewEvent_Date[indx[i] + n[i]] + xf)
+      ## x1m = seq(DI, DF, by = "1 min") - NewEvent_Date[indx[i]] + x0 # Equally spaced time interval
+
       ## Aggregating data at 1-min interval starting at :00
-      x0 = NewEvent_mm[indx[i]] / Meanint * 60 - 1 # Time interval in [min]
-      xf = NewEvent_Date[indx[i]] * nd             # Final date in [min]
-      x = (xf - x0 * nd / 1440:xf)                 # Equally spaced divided tip
-      DI = floor((xf - x0 * nd / 1440))            # Initial date in [min]
-      DF = ceiling(xf)                             # Final date in [min]
-      x1m = (DI:DF)                                # Equally spaced time interval
+      ## Meanint has units mm/h
+      ## x0 is event duration in minutes
+      ## xf is end of event in minutes
+      x0 = NewEvent_mm[indx[i]] / Meanint * 60 - 1    # Time interval in [min]
+      xf = NewEvent_Date[indx[i]]                     # Final date in [min]
+      ## FIXME x = (xf - x0 * nd / 1440:xf)                 # Equally spaced divided tip
+      DI = floor_date(xf - minutes(x0), unit = "minute") # Initial date in [min]
+      DF = ceiling_date(xf, unit = "minute")  # Final date in [min]
+      x1m = seq(DI, DF, by = "1 min")  # Equally spaced time interval
+      ## x1m = (DI:DF)                                # Equally spaced time interval
       y = NewEvent_mm[indx[i]] * rep(1, length(x)) / (x0 + 1)
       ## Tip counting
       r1m = rep(0, length(x1m))
