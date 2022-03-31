@@ -149,6 +149,11 @@ aggregation_cs <- function(Event_Date, Event_mm, scale, bucket, mintip, halves, 
   ## Event_mm = bucket * rep(1, length(Event_Date))
   mintip = TRUE
   halves = TRUE
+
+  is_wholenumber <- function(x, tol = .Machine$double.eps^0.5)  abs(x - round(x)) < tol
+  if (!is_wholenumber(scale)) {
+    stop("Argument `scale` should be an integer representing minutes.")
+  }
   ## if nargin < 2 || isempty(Event_mm)
   ##     % Bucket volume in the rain gauge assumed to be 0.2 if not given.
   ##     Event_mm = 0.2*ones(size(Event_Date));
@@ -186,6 +191,8 @@ aggregation_cs <- function(Event_Date, Event_mm, scale, bucket, mintip, halves, 
   ##     % Run data gap assessment.
   ##     [Voids] = iMHEA_Voids(Event_Date,Event_mm,1);
   ## end
+
+  ## TODO Voids
 
   ## %% TRANFORM DATES TO NUMBERS FOR EASIER PROCESSING - TODO check if necessary
   ## % Modified variables to process.
@@ -380,7 +387,6 @@ aggregation_cs <- function(Event_Date, Event_mm, scale, bucket, mintip, halves, 
       ix = NewDate_1min >= DI & NewDate_1min <= DF
       CumP_1min[ix] = CumP_1min[ix] + y2m
       CumP_1min[NewDate_1min > DF] = CumP_1min[NewDate_1min == DF]
-      stop()
       ## TODO [only needed for plotting]
       ## if (any(is.nan(r2m))) {
       ##   ## Calculations for event plots
@@ -464,7 +470,10 @@ aggregation_cs <- function(Event_Date, Event_mm, scale, bucket, mintip, halves, 
       ## xf is end of event in minutes
       x0 = NewEvent_mm[indx[i]] / Meanint * 60 - 1    # Time interval in [min]
       xf = NewEvent_Date[indx[i]]                     # Final date in [min]
-      ## FIXME x = (xf - x0 * nd / 1440:xf)                 # Equally spaced divided tip
+      ## Equally spaced divided tip [FIXME - equivalent to MATLAB?]
+      ## FIXME - equivalent to MATLAB?
+      ## x = (xf - x0 * nd / 1440:xf)
+      x = seq(xf - minutes(x0), xf, by = "1 min")
       DI = floor_date(xf - minutes(x0), unit = "minute") # Initial date in [min]
       DF = ceiling_date(xf, unit = "minute")  # Final date in [min]
       x1m = seq(DI, DF, by = "1 min")  # Equally spaced time interval
@@ -487,10 +496,11 @@ aggregation_cs <- function(Event_Date, Event_mm, scale, bucket, mintip, halves, 
       }
       y1m = cumsum(r1m) # Cumulative rainfall at each x1m
       ## Assemble cumulative rainfall curve
-      CumP_1min[NewDate_1min >= DI & NewDate_1min <= DF] = CumP_1min[NewDate_1min >= DI & NewDate_1min <= DF] + y1m
+      indx = NewDate_1min >= DI & NewDate_1min <= DF
+      CumP_1min[indx] = CumP_1min[indx] + y1m
       CumP_1min[NewDate_1min > DF] = CumP_1min[NewDate_1min == DF]
       ## Assemble single tip rainfall vector
-      Single_1min[NewDate_1min >= DI & NewDate_1min <= DF] = Single_1min[NewDate_1min >= DI & NewDate_1min <= DF] + y1m
+      Single_1min[indx] = Single_1min[indx] + y1m
       Single_1min[NewDate_1min > DF] = Single_1min[NewDate_1min == DF]
     }
   }
@@ -503,7 +513,11 @@ aggregation_cs <- function(Event_Date, Event_mm, scale, bucket, mintip, halves, 
   ## %% PREPARE THE DATA VECTORS AT THE SPECIFIED SCALE
 
   ## % Equally spaced time interval
-  NewDate = seq(NewDate_1min[1], NewDate_1min[length(NewDate_1min)], by = scale) # CHECK
+  NewDate = seq(
+    NewDate_1min[1],
+    rev(NewDate_1min)[1],
+    by = paste0(scale, " min")
+  )
   ## NewDate = (NewDate_1min(1):scale:NewDate_1min(end))';
   if (halves) {
     ## Rainfall rate at scale interval obtained from fitted cumulative rainfall
@@ -533,14 +547,15 @@ aggregation_cs <- function(Event_Date, Event_mm, scale, bucket, mintip, halves, 
   NewP[round(NewP, 8) == 0] = 0
   Single[round(Single,8) == 0] = 0
   ## % Cut the vectors to the actual initial and final date.
-  nd = 1440 / scale # % Number of intervals per day
-  DI = ceiling(min(Event_Date) * nd) * scale # % Initial date in [min]
-  DF = ceiling(max(Event_Date) * nd) * scale # % Final date in [min]
+  ## nd = 1440 / scale # % Number of intervals per day
+  DI = ceiling_date(min(Event_Date), unit = paste0(scale, " minutes"))
+  ## DI = ceiling_date(min(Event_Date) * nd) # % Initial date in [min]
+  DF = ceiling_date(max(Event_Date), unit = paste0(scale, " minutes")) # % Final date in [min]
   CumP[NewDate < DI | NewDate > DF] = NA
   NewP[NewDate < DI | NewDate > DF] = NA
   Single[NewDate < DI | NewDate > DF] = NA
   NewDate[NewDate < DI | NewDate > DF] = NA
-  NewDate = NewDate / 1440 # % Rescale the date
+  ## NewDate = NewDate / 1440 # % Rescale the date
   ## % Example (or validation) for 1 minute aggregation.
   ## % NewDate = NewDate_1min/1440;
   ## % CumP = CumP_1min;
@@ -620,6 +635,7 @@ aggregate_events <- function(Event_Date, Event_mm) {
   ## fprintf('Rainfall volume after aggregation: %8.2f mm.\n',nansum(NewP_1min))
   ## fprintf('\n')
 }
+
 
 merge_events <- function(Event_Date, Event_mm, MinT) {
   ## Delete tips for small periods.
