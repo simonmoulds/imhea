@@ -191,8 +191,7 @@ aggregation_cs <- function(Event_Date, Event_mm, scale, bucket, mintip, halves, 
   ##     % Run data gap assessment.
   ##     [Voids] = iMHEA_Voids(Event_Date,Event_mm,1);
   ## end
-
-  ## TODO Voids
+  Voids = identify_voids(Event_Date, Event_mm)
 
   ## %% TRANFORM DATES TO NUMBERS FOR EASIER PROCESSING - TODO check if necessary
   ## % Modified variables to process.
@@ -560,24 +559,74 @@ aggregation_cs <- function(Event_Date, Event_mm, scale, bucket, mintip, halves, 
   ## % NewDate = NewDate_1min/1440;
   ## % CumP = CumP_1min;
   ## % NewP = [CumP(1);diff(CumP)];
-
-  ## TODO - how we do this section depends a lot on the above implementation
-  ## % Restoring dates to date format
-  ## NewDate = datetime(NewDate,'ConvertFrom','datenum');
-  ## ## % Placing data gaps again in the aggregated vectors.
-  ## for i = 1:size(Voids,1)
-  ##     CumP(NewDate>Voids(i,1) & NewDate<Voids(i,2)) = NaN;
-  ##     NewP(NewDate>Voids(i,1) & NewDate<Voids(i,2)) = NaN;
-  ##     Single(NewDate>Voids(i,1) & NewDate<Voids(i,2)) = NaN;
-  ## end
-  ## if nargout == 1
-  ##     NewDate = [datenum(NewDate),NewP,CumP,Single];
-  ## end
+  for (i in 1:length(Voids)) {
+    idx = NewDate > Voids[i,1] & NewDate < Voids[i,2]
+    CumP[idx] = NA
+    NewP[idx] = NA
+    Single[idx] = NA
+  }
+  ## TODO return something - data.frame? See what iMHEA_Workflow is expecting
+  data.frame(Date = NewDate, NewP=NewP, CumP=CumP, Single=Single)
+  ## Logging:
   ## fprintf('Rainfall volume before aggregation: %8.2f mm.\n',nansum(Event_mm))
   ## fprintf('Rainfall volume after aggregation: %8.2f mm.\n',nansum(NewP))
   ## fprintf('\n')
 }
 
+identify_voids <- function(Date, Data) {
+  ## iMHEA Determining void intervals.
+  ## [Voids,NoVoids] = iMHEA_Voids(Date,Data).
+  ##
+  ## Input:
+  ## Date  = dd/mm/yyyy hh:mm:ss [date format].
+  ## Data  = Precipitation [mm] or Discharge [l/s, m3/s, mm].
+  ## flag1 = Leave empty not to print interval results.
+  ## flag2 = Leave empty not to plot data inventory.
+  ##
+  ## Output:
+  ## Voids   = A two column matrix containing: [Initial date, Final date].
+  ## NoVoids = A two column matrix containing: [Initial date, Final date].
+
+  ## INITIALISE VARIABLES
+  k = length(Data)
+  Voids = data.frame(
+    a = as.POSIXct(rep(NA, k), tz = tz(Date)),
+    b = as.POSIXct(rep(NA, k), tz = tz(Date))
+  )
+  NoVoids = Voids
+  v = 1
+  nv = 1
+  ## Determine data gaps
+  for (jv in 1:k) {
+    if (is.na(Data[jv])) {
+      ## v = v + 1
+      Voids[v, 1] = Date[jv] # Initial date of void interval
+      Voids[v, 2] = Date[jv + 1] # Final date of void interval
+      if (isTRUE(Voids[v, 1] == Voids[v-1, 2])) {
+        v = v - 1 # Aggregate continuous voids
+        Voids[v, 2] = Voids[v+1, 2]
+        Voids[v + 1,] = NA # FIXME
+        # Voids(v+1,:) = [];
+      }
+      v = v + 1
+    } else {
+      ## nv = nv + 1
+      NoVoids[nv, 1] = Date[jv] # Initial date of no-void interval
+      NoVoids[nv, 2] = Date[jv+1] # Final date of no-void interval
+      if (isTRUE(NoVoids[nv, 1] == NoVoids[nv-1, 2])) {
+        nv = nv - 1
+        NoVoids[nv, 2] = NoVoids[nv+1, 2]
+        # NoVoids(nv+1,:) = [];
+        NoVoids[nv+1,] = NA
+      }
+      nv = nv + 1
+    }
+  }
+  Voids = na.omit(Voids$a)
+  NoVoids = na.omit(NoVoids$a)
+  ## list(Voids=Voids, NoVoids=NoVoids)
+  Voids
+}
 
 aggregate_events <- function(Event_Date, Event_mm) {
   ## Agregate rainfall at 1-min intervals.
