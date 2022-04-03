@@ -876,3 +876,225 @@ intCorrection <- function(r1m, y, Lowint, halves, x, x1m) {
   ## r2m = c(y2m[1], diff(y2m))
   ## list(r2m = r2m, y2m = y2m$y, biased = biased, bEvent = bEvent)
 }
+
+aggregation <- function(Date, P, Scale, flag) {
+  ## %iMHEA Agregation of rainfall (agregation within an interval).
+  ## % [NewDate,NewP,CumP,VoidP,MaxP] = iMHEA_Aggregation(Date,P,scale,flag)
+  ## % aggregates precipitation data using tipping bucket counting.
+  ## %
+  ## % Input:
+  ## % Date  = dd/mm/yyyy hh:mm:ss [date format].
+  ## % P     = Precipitation [mm].
+  ## % scale = Agregation interval [min].
+  ## % flag  = leave empty NOT to run the data voids assessment and plots.
+  ## %
+  ## % Output:
+  ## % NewDate   = dd/mm/yyyy hh:mm:ss [date format] at specified interval.
+  ## % NewP      = Agregated Precipitation [mm].
+  ## % CumP      = Cumulative rainfall [mm].
+  ## % VoidP     = Void intervals [mm].
+  ## % MaxP      = Maximum intensity for specified interval [mm].
+
+  ## % Move date by 0.25 seconds to avoid numerical errors.
+  Date = Event - seconds(0.25)
+  Voids = identify_voids(Date, P)
+  P[is.na(P)] = 0
+  ## % Transform date variables for easier processing.
+  ## Date = datenum(Date);
+
+  ## %% AGGREGATION
+  nd = 1440 / scale
+  DI = ceiling_date(min(Date)) # Initial date
+  DF = ceiling_date(max(Date)) # Final date
+  NewDate = seq(DI, DF, by = "1 min")
+  n = length(NewDate) # Number of intervals
+  NewP = rep(0, length(NewDate)) # Initialize aggregation
+  ## Delete zero events
+  indx = (P == 0)
+  Date = Date[P > 0]
+  P = P[P > 0]
+  k = length(P)
+
+  ## if nd*(Date(1)) == NewDate(1)
+  if (Date[1] == NewDate[1]) {
+    j = 2 # Data counter
+    NewP[1] = P[1]
+  } else {
+    j = 1 # Data counter
+  }
+
+  for (i in j:n) {
+    ## Aggregate values
+    while (j <= k & Date[j] <= NewDate[i]) {
+      NewP[i] = NewP[i] + P[j]
+      j = j + 1
+    }
+  }
+
+  ## Fill gaps between data when there is only one value missing
+  for (i in 2:(n-1)) {
+    if (is.na(NewP[i])) {
+      NewP[i] = 0 # FIXME
+    }
+  }
+
+  ## %% PREPARE THE DATA VECTORS AT THE SPECIFIED SCALE
+  CumP = cumsum(NewP) # Initialize accumulation
+  ## NewDate = datetime(NewDate/nd,'ConvertFrom','datenum'); % Rescale the date
+  ## Date = datetime(Date,'ConvertFrom','datenum'); % Restore the original date
+  ## Return data gaps to aggregated vectors
+  VoidP = NewP
+  for (i in 1:length(Voids)) {
+    CumP[NewDate > Voids[i,1] & NewDate < Voids[i,2]] = NA
+    NewP[NewDate > Voids[i,1] & NewDate < Voids[i,2]] = NA
+  }
+  VoidP[!is.na(NewP)] = NA
+  ## Correct the last row
+  if (rev(NewP)[1] == 0 & is.na(rev(NewP)[2])) {
+    VoidP[length(VoidP)] = rev(NewP)[1]
+    NewP[length(NewP)] = NA
+    CumP[length(CumP)] = NA
+  }
+  MaxP = max(NewP, na.rm = TRUE) # Maximum intensity
+  return(data.frame(NewDate, NewP, CumP, VoidP))
+}
+
+fill_gaps <- function(Date1, P1, Date2, P2, cutend = FALSE) {
+  ## %iMHEA Data gaps fill.
+  ## % [NewDate1,NewP1,NewDate2,NewP2] = iMHEA_FillGaps(Date1,P1,Date1,P2,cutend,flag).
+  ## %
+  ## % Input:
+  ## % Date1, Date2 = dd/mm/yyyy hh:mm:ss [date format].
+  ## %                Both should be at the same temporal scale.
+  ## % P1, P2       = Precipitation [mm].
+  ## % cutend = Cut vectors not to fill gaps after the end [default: false].
+  ## % flag   = leave empty NOT to run the data voids assessment and plots.
+  ## %
+  ## % Output:
+  ## % NewDate1, 2   = dd/mm/yyyy hh:mm:ss [date format].
+  ## % NewP1, NewP2  = Filled precipitation data [mm].
+
+  ## ## FOR TESTING
+  ## library(tidyverse)
+  ## library(lubridate)
+  ## file = "inst/extdata/iMHEA_raw/HUA/iMHEA_HUA_01_PD_01_raw.csv"
+  ## x <- readr::read_csv(file)
+  ## tz <- "Etc/GMT-5"
+  ## try(tz <- lutz::tz_lookup_coords(lat, lon, method = "accurate"), silent = TRUE)
+  ## options(digits.secs = 6)
+  ## Date1 <- x[["Date"]] %>% as.POSIXct(tz = tz, format = "%d/%m/%Y %H:%M:%OS")
+  ## P1 <- x[["Event mm"]]
+
+  ## Check if data have the same temporal resolution
+  scale1 = diff(Date1)
+  scale2 = diff(Date2)
+  if (median(scale1) > median(scale2)) {
+    ## fprintf('Input data are not at the same temporal scale.\n')
+    scale = round(median(scale1)) # Same temporal resolution
+    aggregation(Date1, P1, scale) # TODO
+    aggregation(Date2, P2, scale) # TODO
+    ## [Date1,P1] = iMHEA_Aggregation(Date1,P1,scale);
+    ## [Date2,P2] = iMHEA_Aggregation(Date2,P2,scale);
+  } else if (median(scale2) > median(scale1)) {
+    ## fprintf('Input data are not at the same temporal scale.\n')
+    scale = round(median(scale2)) # Same temporal resolution
+    aggregation(Date1, P1, scale) # TODO
+    aggregation(Date2, P2, scale) # TODO
+    ## [Date1,P1] = iMHEA_Aggregation(Date1,P1,scale);
+    ## [Date2,P2] = iMHEA_Aggregation(Date2,P2,scale);
+  } else {
+    scale = round(median(scale1))
+  } # FIXME
+
+  ## TODO work out if this is necessary - I think it is only being used for the side-effect of plotting/logging
+  ## %% VOID ASSESSMENT
+  ## % Run data gap assessment and print inventory.
+  ## fprintf('Data gap assessment of P1.\n')
+  ## [~] = iMHEA_Voids(Date1,P1,1);
+  ## fprintf('Data gap assessment of P2.\n')
+  ## [~] = iMHEA_Voids(Date2,P2,1);
+
+  ## CREATE UNIFIED DATE VECTOR AND ASSIGN CORRESPONDENT INPUT DATA
+  nd = 1440 / scale # Number of intervals per day
+  ## % Convert Dates to integers to avoid precision errors
+  ## Date1 = round(nd*datenum(Date1));
+  ## Date2 = round(nd*datenum(Date2));
+  ## % Define initial and end dates and create single vector
+  DI = min(Date1[1], Date2[1])
+  DF = max(rev(Date1)[1], rev(Date2)[1])
+  NewDate = seq(DI, DF, by = "1 min")
+  ## Assign data when they correspond
+  NewP1 = rep(NA, length(NewDate))
+  NewP2 = rep(NA, length(NewDate))
+  NewP1[match(Date1, NewDate)] = P1 # FIXME what if they don't match?
+  NewP2[match(Date2, NewDate)] = P2 # FIXME as above
+  ## Optionally, cut vectors not to fill gaps after then end
+  if (cutend) {
+    ## Identify the last non-NA data in both vectors
+    indexnP1 = max(which(!is.na(P1)))
+    indexnP2 = max(which(!is.na(P2))) # FIXME what if all NA values?
+    indexndate = min(Date1[indexnP1], Date2[indexnP2])
+    ## Cut vectors after the minimum of the identified dates
+    NewP1 = NewP1[NewDate <= indexndate]
+    NewP2 = NewP2[NewDate <= indexndate]
+    NewDate = NewDate[NewDate <= indexndate]
+  }
+
+  ## TEST IF OVERLAPPING DATA EXIST
+  ## % Extract all the sections where NaN data exist in any of the vectors.
+  auxP1 = NewP1
+  auxP2 = NewP2
+  auxP1 = auxP1[!(is.na(NewP1) | is.na(NewP2))]
+  auxP2 = auxP2[!(is.na(NewP1) | is.na(NewP2))]
+  ## Check if any of the vectors are empty
+  if (length(auxP1) <= 1) {
+    ## Restore data if cut before
+    if (cutend) {
+      NewDate = seq(DI, DF, by = "1 min")
+      ## Assign data when they correspond
+      NewP1 = rep(NA, length(NewDate))
+      NewP2 = rep(NA, length(NewDate))
+      NewP1[match(Date1, NewDate)] = P1
+      NewP2[match(Date2, NewDate)] = P2
+    }
+    return(data.frame(NewDate, NewP1, NewP2))
+  }
+  ## FILL DATA GAPS
+  auxCumP1 = cumsum(auxP1)
+  auxCumP2 = cumsum(auxP2)
+  mod = lm(auxCumP1, aux)
+  r2 = summary(mod)$r.squared
+  ## Fill gaps only if the correlation is almost perfect
+  if (R < 0.99) {
+    ## fprintf('The correlation is not significant as to fill the data, with R2 = %6.4f.',R)
+    if (cutend) {
+      NewDate = seq(DI, DF, sep = "1 min")
+      ## Assign data when they correspond
+      NewP1 = rep(NA, length(NewDate))
+      NewP2 = rep(NA, length(NewDate))
+      NewP1[match(Date1, NewDate)] = P1
+      NewP2[match(Date2, NewDate)] = P2
+    }
+    return(data.frame(NewDate, NewP1, NewP2))
+  }
+  ## NewP1(isnan(NewP1)) = NewP2(isnan(NewP1))/M;
+  ## NewP2(isnan(NewP2)) = NewP1(isnan(NewP2))*M;
+
+  ## %% RESTORE THE DATA AND THE END OF THE VECTORS
+  ## if cutend
+  ##     NewP1(ismember(NewDate,Date1)) = P1;
+  ##     NewP2(ismember(NewDate,Date2)) = P2;
+  ## end
+  if (cutend) {
+    ## % Assign data when they correspond
+    NewP1[match(Date1, NewDate)] = P1
+    NewP2[match(Date2, NewDate)] = P2
+  }
+  ## %% GENERATE OUTPUTS
+  ## % Restore Dates from integers made to avoid precision errors
+  ## Date1 = datetime(Date1/nd,'ConvertFrom','datenum');
+  ## Date2 = datetime(Date2/nd,'ConvertFrom','datenum');
+  ## NewDate1 = datetime(NewDate/nd,'ConvertFrom','datenum');
+  ## NewDate2 = datetime(NewDate/nd,'ConvertFrom','datenum');
+  NewDate1 = data.frame(NewDate, NewP1, NewP2)
+}
