@@ -989,14 +989,12 @@ fill_gaps <- function(Date1, P1, Date2, P2, cutend = FALSE) {
   scale1 = diff(Date1)
   scale2 = diff(Date2)
   if (median(scale1) > median(scale2)) {
-    ## fprintf('Input data are not at the same temporal scale.\n')
     scale = round(median(scale1)) # Same temporal resolution
     aggregation(Date1, P1, scale) # TODO
     aggregation(Date2, P2, scale) # TODO
     ## [Date1,P1] = iMHEA_Aggregation(Date1,P1,scale);
     ## [Date2,P2] = iMHEA_Aggregation(Date2,P2,scale);
   } else if (median(scale2) > median(scale1)) {
-    ## fprintf('Input data are not at the same temporal scale.\n')
     scale = round(median(scale2)) # Same temporal resolution
     aggregation(Date1, P1, scale) # TODO
     aggregation(Date2, P2, scale) # TODO
@@ -1016,9 +1014,6 @@ fill_gaps <- function(Date1, P1, Date2, P2, cutend = FALSE) {
 
   ## CREATE UNIFIED DATE VECTOR AND ASSIGN CORRESPONDENT INPUT DATA
   nd = 1440 / scale # Number of intervals per day
-  ## % Convert Dates to integers to avoid precision errors
-  ## Date1 = round(nd*datenum(Date1));
-  ## Date2 = round(nd*datenum(Date2));
   ## % Define initial and end dates and create single vector
   DI = min(Date1[1], Date2[1])
   DF = max(rev(Date1)[1], rev(Date2)[1])
@@ -1041,7 +1036,7 @@ fill_gaps <- function(Date1, P1, Date2, P2, cutend = FALSE) {
   }
 
   ## TEST IF OVERLAPPING DATA EXIST
-  ## % Extract all the sections where NaN data exist in any of the vectors.
+  ## Extract all the sections where NaN data exist in any of the vectors.
   auxP1 = NewP1
   auxP2 = NewP2
   auxP1 = auxP1[!(is.na(NewP1) | is.na(NewP2))]
@@ -1059,14 +1054,13 @@ fill_gaps <- function(Date1, P1, Date2, P2, cutend = FALSE) {
     }
     return(data.frame(NewDate, NewP1, NewP2))
   }
-  ## FILL DATA GAPS
+  ## Fill data gaps
   auxCumP1 = cumsum(auxP1)
   auxCumP2 = cumsum(auxP2)
   mod = lm(auxCumP1, aux)
   r2 = summary(mod)$r.squared
   ## Fill gaps only if the correlation is almost perfect
   if (R < 0.99) {
-    ## fprintf('The correlation is not significant as to fill the data, with R2 = %6.4f.',R)
     if (cutend) {
       NewDate = seq(DI, DF, sep = "1 min")
       ## Assign data when they correspond
@@ -1077,24 +1071,100 @@ fill_gaps <- function(Date1, P1, Date2, P2, cutend = FALSE) {
     }
     return(data.frame(NewDate, NewP1, NewP2))
   }
+  ## FIXME - what is M?
   ## NewP1(isnan(NewP1)) = NewP2(isnan(NewP1))/M;
   ## NewP2(isnan(NewP2)) = NewP1(isnan(NewP2))*M;
-
-  ## %% RESTORE THE DATA AND THE END OF THE VECTORS
-  ## if cutend
-  ##     NewP1(ismember(NewDate,Date1)) = P1;
-  ##     NewP2(ismember(NewDate,Date2)) = P2;
-  ## end
   if (cutend) {
     ## % Assign data when they correspond
     NewP1[match(Date1, NewDate)] = P1
     NewP2[match(Date2, NewDate)] = P2
   }
-  ## %% GENERATE OUTPUTS
-  ## % Restore Dates from integers made to avoid precision errors
-  ## Date1 = datetime(Date1/nd,'ConvertFrom','datenum');
-  ## Date2 = datetime(Date2/nd,'ConvertFrom','datenum');
-  ## NewDate1 = datetime(NewDate/nd,'ConvertFrom','datenum');
-  ## NewDate2 = datetime(NewDate/nd,'ConvertFrom','datenum');
   NewDate1 = data.frame(NewDate, NewP1, NewP2)
 }
+
+average <- function(Date, Q, scale) {
+  ## %iMHEA Agregation of hydrological data (average within an interval).
+  ## % [NewDate,NewQ,CumQ,VoidQ,MeanQ,MaxQ,MinQ] =
+  ## % iMHEA_Average(Date,Q,scale,flag) averages discharge data.
+  ## %
+  ## % Input:
+  ## % Date  = dd/mm/yyyy hh:mm:ss [date format].
+  ## % Q     = Stage or Discharge [l/s, m3/s, mm].
+  ## % scale = Agregation interval [min].
+  ## % flag  = leave empty NOT to run the data voids assessment and plots.
+  ## %
+  ## % Output:
+  ## % NewDate   = dd/mm/yyyy hh:mm:ss [date format] at specified interval.
+  ## % NewQ      = Average stage or discharge [l/s, m3/s, mm].
+  ## % CumQ      = Cumulative discharge [l/s, m3/s, mm].
+  ## % VoidP     = Void intervals [l/s, m3/s, mm].
+  ## % MeanQ     = Mean value for specified interval [l/s, m3/s, mm].
+  ## % MaxQ      = Maximum value for specified interval [l/s, m3/s, mm].
+  ## % MinQ      = Minimum value for specified interval [l/s, m3/s, mm].
+  ## %
+  ## % Boris Ochoa Tocachi
+  ## % Imperial College London
+  ## % Created in May, 2014
+  ## % Last edited in November, 2017
+  Date = Date - seconds(0.25)
+  Voids = identify_voids(Date, Q)
+  nd = 1440 / scale
+  DI = ceiling_date(min(Date)) # Initial date
+  DF = ceiling_date(max(Date)) # Final date
+  NewDate = seq(DI, DF, by = "1 min")
+  n = length(NewDate) # Number of intervals
+  NewQ = rep(0, length(NewDate)) # Initialize aggregation
+  Date = Date[!is.na(Q)]
+  Q = Q[!is.na(Q)]
+  k = length(Q) # Length of input data
+  ## Set initial counter
+  if (Date[1] == NewDate[1]) {
+    j = 2
+    NewQ[1] = Q[1]
+  } else {
+    j = 1
+  }
+  for (i in j:n) {
+    l = 0 # Interval data counter
+    ## Aggregate values
+    while (j <= k ** Date[j] < NewDate[i]) {
+      NewQ[i] = NewQ[i] + Q[j]
+      j = j+1
+      l = l+1
+    }
+    NewQ[i] = NewQ[i] / l
+  }
+  ## Fill gaps between data when there is only one value missing
+  for (i in 2:(n-1)) {
+    if (is.na(NewQ[i])) {
+      NewQ[i] = mean(c(NewQ[i-1], NewQ[i+1]))
+    }
+  }
+  ## Fill remaining gaps with zeros to calculate cumQ
+  NewQ[is.na(NewQ)] = 0
+
+  ## PREPARE THE DATA VECTORS AT THE SPECIFIED SCALE
+  CumQ = cumsum(NewQ) # Initialize accumulation
+  VoidQ = NewQ
+  for (i in 1:length(Voids)) {
+    CumQ[NewDate > Voids[i,1] & NewDate < Voids[i,2]] = NA
+    NewQ[NewDate > Voids[i,1] & NewDate < Voids[i,2]] = NA
+  }
+  VoidQ[!is.na(NewQ)] = NA
+  ## Check initial and final values of Q for data existence
+  if (NewQ[1] == 0 & NewQ[2] != 0) {
+    VoidQ[1] = NewQ[1]
+    NewQ[1] = NA
+    CumQ[1] = NA
+  }
+  if (rev(NewQ)[1] == 0 && rev(NewQ)[2] != 0) {
+    VoidQ[length(VoidQ)] = rev(NewQ)[1]
+    NewQ[length(NewQ)] = NA
+    CumQ[length(CumQ)] = NA
+  }
+  MeanQ = mean(NewQ, na.rm = TRUE)
+  MaxQ = max(NewQ, na.rm = TRUE)
+  MinQ = min(NewQ, na.rm = TRUE)
+  return(data.frame(NewDate, NewQ, CumQ, VoidQ))
+}
+
