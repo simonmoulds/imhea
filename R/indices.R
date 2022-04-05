@@ -13,180 +13,87 @@
 #' sum(1:10)
 #' }
 
-## function [IndicesP,PM,IDC,IndicesQ,QM,FDC,QYEAR,RRa,RRm,RRl,CumP,CumQ,DP,DQ] = iMHEA_Indices(Date,P,Q,A,varargin)
-## %iMHEA Hydrological indices for rainfall-runoff monitoring.
-## % [Indices] = iMHEA_Indices(Date,P,Q,A,flag) calculates iMHEA hydrological
-## % indices using rainfall and runoff data.
-## %
-## % Input:
-## % Date = dd/mm/yyyy hh:mm:ss [date format].
-## % P = Precipitation [mm].
-## % Q = Discharge [l/s].
-## % A = Catchment area [km2].
-## % flag = leave empty NOT to graph plots.
-## %
-## % Output:
-## % IndicesP = Vector with iMHEA's Hydrological Indices for Precipitation.
-## %           PYear = Annual precipitation [mm].
-## %           DayP0 = Number of Days with zero precipitation per year [-].
-## %           PMDry = Precipitation of driest month [mm].
-## %           Sindx = Seasonality index [-].
-## %           iM15m = Maximum precipitation intensity (15 min scale) [mm/h].
-## %           iM1hr = Maximum precipitation intensity (1 hour scale) [mm/h].
-## % PM   = Monthly precipitation (mm) per month number [Jan=1, Dec=12].
-## % IDC  = Maximum Intensity - Duration Curve [mm/h v time].
-## %
-## % IndicesQ = Vector with iMHEA's Hydrological Indices for Discharge.
-## %           Low flows:
-## %               QDMin = Minimum daily flow [l/s/km2].
-## %               Q95   = 95 Percentile flow from IDC [l/s/km2].
-## %               DayQ0 = Days with zero flow per year [-].
-## %               PQ0   = Proportion of days with zero flow per year [-].
-## %               QMDry = Mean daily flow of driest month [l/s/km2].
-## %           High flows:
-## %               QDMax = Maximum Daily flow [l/s/km2].
-## %               Q10   = 10 Percentile flow from IDC [l/s/km2].
-## %           Mean flows:
-## %               QDMY  = Annual Mean Daily flow [l/s/km2].
-## %               QDML  = Long-term Mean Daily flow [l/s/km2].
-## %               Q50   = 50 percentile flow from IDC [l/s/km2].
-## %           Regulation:
-## %               BFI1   = Baseflow index from UK handbook [-].
-## %               k1     = Recession constant from UK handbook [-].
-## %               BFI2   = Baseflow index 2-parameter algorithm [-].
-## %               k2     = Recession constant 2-parameter algorithm [-].
-## %               Range  = Discharge range [-] Qmax/Qmin.
-## %               R2FDC  = Slope of the FDC between 33% and 66% / Mean flow.
-## %               IRH   = Hydrological Regulation Index [-].
-## %               RBI1  = Richards-Baker annual flashiness index [-].
-## %               RBI2  = Richards-Baker seasonal flashiness index [-].
-## %               DRYQMEAN = Min monthly flow / Mean monthly flow [-].
-## %               DRYQWET  = Min monthly flow / Max monthly flow [-].
-## %               SINDQ = Seasonality Index in flows [-].
-## % QM = Monthly Mean Daily flow (l/s) per month number [Jan=1, Dec=12].
-## % FDC  = Flow Duration Curve [l/s v %].
-## %
-## % RR   = Runoff Ratio [-) (Annual Discharge)/(Annual precipitation).
-## %        a: from interannual averages
-## %        m: from monthly averages
-## %        l: from long-term data averages
-## % QYEAR= Annual Discharge [mm].
-## % Diff = Annual Precipitation - Annual Discharge [mm].
-## % CumP = Cumulative Rainfall [mm].
-## % CumQ = Cumulative Discharge [mm].
-## % DP   = Daily Precipitation [mm].
-## % DQ   = Daily Discharge and baseflow separation [l/s/km2].
-## %
-## % Boris Ochoa Tocachi
-## % Imperial College London
-## % Created in June, 2014
-## % Last edited in February, 2018
+indices <- function(Date, P, Q, A, ...) {
+  ## %iMHEA Hydrological indices for rainfall-runoff monitoring.
+  ## % [Indices] = iMHEA_Indices(Date,P,Q,A,flag) calculates iMHEA hydrological
+  ## % indices using rainfall and runoff data.
+  ## %
+  ## % Input:
+  ## % Date = dd/mm/yyyy hh:mm:ss [date format].
+  ## % P = Precipitation [mm].
+  ## % Q = Discharge [l/s].
+  ## % A = Catchment area [km2].
+  ## % flag = leave empty NOT to graph plots.
+  ## %
+  ## % Output:
+  ## % IndicesP = Vector with iMHEA's Hydrological Indices for Precipitation.
+  ## %           PYear = Annual precipitation [mm].
+  ## %           DayP0 = Number of Days with zero precipitation per year [-].
+  ## %           PMDry = Precipitation of driest month [mm].
+  ## %           Sindx = Seasonality index [-].
+  ## %           iM15m = Maximum precipitation intensity (15 min scale) [mm/h].
+  ## %           iM1hr = Maximum precipitation intensity (1 hour scale) [mm/h].
+  ## % PM   = Monthly precipitation (mm) per month number [Jan=1, Dec=12].
+  ## % IDC  = Maximum Intensity - Duration Curve [mm/h v time].
+  ## %
+  ## % IndicesQ = Vector with iMHEA's Hydrological Indices for Discharge.
+  ## %           Low flows:
+  ## %               QDMin = Minimum daily flow [l/s/km2].
+  ## %               Q95   = 95 Percentile flow from IDC [l/s/km2].
+  ## %               DayQ0 = Days with zero flow per year [-].
+  ## %               PQ0   = Proportion of days with zero flow per year [-].
+  ## %               QMDry = Mean daily flow of driest month [l/s/km2].
+  ## %           High flows:
+  ## %               QDMax = Maximum Daily flow [l/s/km2].
+  ## %               Q10   = 10 Percentile flow from IDC [l/s/km2].
+  ## %           Mean flows:
+  ## %               QDMY  = Annual Mean Daily flow [l/s/km2].
+  ## %               QDML  = Long-term Mean Daily flow [l/s/km2].
+  ## %               Q50   = 50 percentile flow from IDC [l/s/km2].
+  ## %           Regulation:
+  ## %               BFI1   = Baseflow index from UK handbook [-].
+  ## %               k1     = Recession constant from UK handbook [-].
+  ## %               BFI2   = Baseflow index 2-parameter algorithm [-].
+  ## %               k2     = Recession constant 2-parameter algorithm [-].
+  ## %               Range  = Discharge range [-] Qmax/Qmin.
+  ## %               R2FDC  = Slope of the FDC between 33% and 66% / Mean flow.
+  ## %               IRH   = Hydrological Regulation Index [-].
+  ## %               RBI1  = Richards-Baker annual flashiness index [-].
+  ## %               RBI2  = Richards-Baker seasonal flashiness index [-].
+  ## %               DRYQMEAN = Min monthly flow / Mean monthly flow [-].
+  ## %               DRYQWET  = Min monthly flow / Max monthly flow [-].
+  ## %               SINDQ = Seasonality Index in flows [-].
+  ## % QM = Monthly Mean Daily flow (l/s) per month number [Jan=1, Dec=12].
+  ## % FDC  = Flow Duration Curve [l/s v %].
+  ## %
+  ## % RR   = Runoff Ratio [-) (Annual Discharge)/(Annual precipitation).
+  ## %        a: from interannual averages
+  ## %        m: from monthly averages
+  ## %        l: from long-term data averages
+  ## % QYEAR= Annual Discharge [mm].
+  ## % Diff = Annual Precipitation - Annual Discharge [mm].
+  ## % CumP = Cumulative Rainfall [mm].
+  ## % CumQ = Cumulative Discharge [mm].
+  ## % DP   = Daily Precipitation [mm].
+  ## % DQ   = Daily Discharge and baseflow separation [l/s/km2].
+  process_p(Date, P)
+  process_q(Date, Q, A) # TODO
 
-## %% PROCESS
+  ## Runoff coefficient
+  QYEAR = IndicesQ[8] * 365 / 1000000 * 86400
+  RRa = QYEAR / IndicesP[1]
+  CumQ[,2] = CumQ[,2] / 1000000 * 86400
+  if (is.na(QYEAR)) {
+    QYEAR = mean(DQ[,2]) / 1000000 * 86400
+  }
+  RRl = mean(DQ[,2]) / 1000000 * 86400 / (mean(DP[,2]))
 
-## % Calculate indices for Discharge and Precipitation.
-## if nargin >= 5
-##     [IndicesP,PM,IDC,CumP,DP] = iMHEA_ProcessP(Date,P,1);
-##     [IndicesQ,QM,FDC,CumQ,DQ] = iMHEA_ProcessQ(Date,Q,A,1,1);
-## else
-##     [IndicesP,PM,IDC,CumP,DP] = iMHEA_ProcessP(Date,P);
-##     [IndicesQ,QM,FDC,CumQ,DQ] = iMHEA_ProcessQ(Date,Q,A);
-## end
-
-## % Runoff Coefficient.
-## QYEAR = IndicesQ(8)*365/1000000*86400;
-## RRa = QYEAR / IndicesP(1);
-## CumQ(:,2) = CumQ(:,2)/1000000*86400;
-
-## if isnan(QYEAR); QYEAR = nanmean(DQ(:,2))/1000000*86400; end
-## RRl = nanmean(DQ(:,2))/1000000*86400 / (nanmean(DP(:,2)));
-
-## % Monthly discharge in mm.
-## MDays = [31 28 31 30 31 30 31 31 30 31 30 31]';
-## QM = QM.*MDays/1000000*86400;
-## RRm = nansum(QM)/nansum(PM);
-
-## if nargin >= 5
-##     % Transform dates to date format for plots
-##     CumPDate = datetime(CumP(:,1),'ConvertFrom','datenum');
-##     CumQDate = datetime(CumQ(:,1),'ConvertFrom','datenum');
-##     NewDateP = datetime(DP(:,1),'ConvertFrom','datenum');
-##     NewDateQ = datetime(DQ(:,1),'ConvertFrom','datenum');
-
-##     figure
-##     subplot(2,1,1)
-##     bar(Date,P)
-##     xlabel('Date')
-##     ylabel('Precipitation (mm)')
-##     set(gca,'YDir','reverse')
-##     Xlim = get(gca,'XLim');
-##     title('Input Precipitation')
-##     box on
-
-##     subplot(2,1,2)
-##     plot(Date,Q/A)
-##     xlabel('Date')
-##     ylabel('Discharge (l/s/km2)')
-##     title('Input Discharge')
-##     box on
-
-##     figure
-##     subplot(2,1,1)
-##     plot(CumPDate,CumP(:,2),CumQDate,CumQ(:,2))
-##     title('Cumulative comparison')
-##     legend('Cum. Rainfall (mm)','Cum. Discharge(mm)','Location','NorthWest')
-##     xlabel('Date')
-##     ylabel('Cumulative variables')
-##     box on
-
-##     subplot(2,1,2)
-##     plot(CumP(:,2),CumQ(:,2))
-##     title('Double Mass Plot')
-##     xlabel('Precipitation')
-##     ylabel('Discharge')
-##     box on
-
-##     figure
-##     semilogx(IDC(:,1),IDC(:,2))
-##     xlabel('Duration (min)')
-##     ylabel('Maximum precipitation intensity (mm/h)')
-##     title('Maximum Intensity-Duration Curve')
-##     box on
-
-##     figure
-##     semilogy(FDC(:,1),FDC(:,2))
-##     xlabel('Exceedance probability')
-##     ylabel('Discharge (l/s/km2)')
-##     title('Flow Duration Curve')
-##     box on
-
-##     figure
-##     plot((1:12)',PM,(1:12)',QM)
-##     xlabel('Month')
-##     ylabel('Variable (mm)')
-##     legend('Precipitation (mm)','Discharge (mm)')
-##     title('Monthly Data')
-##     xlim([0 13])
-##     box on
-
-##     figure
-##     subplot(2,1,1)
-##     bar(NewDateP,DP(:,2))
-##     xlabel('Date')
-##     ylabel('Precipitation (mm)')
-##     set(gca,'YDir','reverse','XLim',Xlim);
-##     title('Daily Precipitation')
-##     box on
-
-##     subplot(2,1,2)
-##     plot(NewDateQ,DQ(:,2),NewDateQ,DQ(:,3),NewDateQ,DQ(:,4))
-##     xlabel('Date')
-##     ylabel('Discharge (l/s/km2)')
-##     legend('Discharge','Baseflow','Stormflow')
-##     set(gca,'XLim',Xlim);
-##     title('Daily Discharge')
-##     box on
-## end
+  ## Monthly discharge in mm
+  MDays = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
+  QM = QM * MDays / 1000000 * 86400
+  RRm = sum(QM) / sum(PM)
+  ## TODO plots
+}
 
 ## function [Climate,Indices] = iMHEA_IndicesTotal(Date,P,Q,A,varargin)
 ## %iMHEA All Hydrological indices for rainfall-runoff monitoring.
@@ -343,3 +250,232 @@
 ## fprintf('\n')
 ## fprintf('Process finished.\n')
 ## fprintf('\n')
+
+process_p <- function(Date, P, ...) {
+  ## %iMHEA Hydrological index calculation for Precipitation.
+  ## % [Indices] = iMHEA_ProcessP(Date,P,flag) calculates rainfall indices.
+  ## %
+  ## % Input:
+  ## % Date = dd/mm/yyyy hh:mm:ss [date format].
+  ## % P    = Precipitation [mm].
+  ## % flag = leave empty NOT to graph plots.
+  ## %
+  ## % Output:
+  ## % IndicesP = Vector with iMHEA's Hydrological Indices for Precipitation.
+  ## %            PYear = Annual precipitation [mm].
+  ## %            DayP0 = Number of days with zero precipitation per year [day].
+  ## %            PP0 = Percentage of days with zero precipitation per year [-].
+  ## %            PMDry = Precipitation of driest month [mm].
+  ## %            Sindx = Seasonality Index [-].
+  ## %            iM15m = Maximum precipitation intensity (15 min scale) [mm/h].
+  ## %            iM1hr = Maximum precipitation intensity (1 hour scale) [mm/h].
+  ## % PM   = Monthly precipitation [mm] per month number [Jan=1, Dec=12].
+  ## % IDC  = Maximum Intensity - Duration Curve [mm/h v time].
+  ## % CumP = Cumulative Precipitation [date v mm].
+  ## % DP   = Daily precipitation only when data exist [date v mm].
+
+  ## % Agregate data at daily basis.
+  ## [DDate,DP,DCumP] = iMHEA_Aggregation(Date,P,1440);
+  aggregation(Date, P, 1440) # TODO what should aggregation(...) return?
+  ## CumP = [datenum(DDate),DCumP];
+
+  ## Consider periods only when data exists
+  NewDate = DDate[!is.na(DDate)]
+  NewP = DP[!is.na(DP)]
+  k = length(NewP)
+  ## DP = [datenum(NewDate),NewP];
+
+  ## % Number of Days with zero precipitation.
+  ZeroP = NewP[NewP == 0]
+  DayP0 = floor(365 * length(ZeroP) / k)
+  PP0 = DayP0 / 365
+
+  ## Annual and monthly aggregated data
+  PM = monthly_rain(Date[!is.na(P)], P[!is.na(P)]) # TODO
+
+  ## Precipitation in the driest month
+  PMDry = min(PM)
+  ## Annual precipitation
+  PYear = sum(PM)
+  if (is.na(PYear)) { # Why would it be NA?
+    PYear = 365 * mean(NewP)
+  }
+  SI = (1 / PYear) * (sum(abs(PM - PYear / 12))) * 6 / 11
+
+  ## Maximum intensity duration curve
+  idc = idc(Date, P) # TODO
+
+  indices = list(PYear, DayP0, PP0, PMDry, SINDX, iM15m, iM1hr)
+  indices
+  ## % Hydrological indices for precipitation.
+  ## IndicesP = [PYear;...
+  ##            DayP0;...
+  ##            PP0;...
+  ##            PMDry;...
+  ##            SINDX;...
+  ##            iM15m;...
+  ##            iM1hr];
+}
+
+monthly_rain <- function(Date, P) {
+  ## %iMHEA Calculation of monthly and annual Precipitation averages.
+  ## % [P_Month,P_Year,P_Avg_Month,P_Avg_Year,P_Matrix] =
+  ## % iMHEA_MonthlyRain(Date,P,flag).
+  ## %
+  ## % Input:
+  ## % Date = dd/mm/yyyy hh:mm:ss [date format].
+  ## % P    = Precipitation [mm].
+  ## % flag = leave empty NOT to graph plots.
+  ## %
+  ## % Output:
+  ## % P_Month     = Time series of monthly precipitation [mm].
+  ## % P_Year      = Time series of annual precipitation [year and mm].
+  ## % P_Avg_Month = 12 average monthly precipitation values [mm].
+  ## % P_Avg_Year  = Annual precipitation value [mm].
+  ## % P_Matrix    = Matrix of precipitation data (Year vs Months) [mm].
+  ## % P_Min_Year  = Time series of minimum annual discharge [year and l/s or l/s/km2].
+  ## % P_Max_Year  = Time series of maximum annual discharge [year and l/s or l/s/km2].
+  ## %
+  ## % Boris Ochoa Tocachi
+  ## % Imperial College London
+  ## % Created in September, 2017
+  ## % Last edited in November, 2017
+  Years = format(Date, "%Y") %>% as.numeric
+  n = max(Years) - min(Years) + 1 # Number of years
+  Months = format(Date, "%m") %>% as.numeric
+  P_Year = rep(0, n)
+  P_YMax = matrix(data = 0, nrow = n, ncol = 2)
+  P_YMin = matrix(data = 0, nrow = n, ncol = 2)
+  matrixPM1 = rep(0, 12)
+  sizePM1 = rep(0, 12)
+  for (i in 1:n) {
+    ## Annual accumulation
+    P_Year[i] = sum(P[Years = min(Years) + i - 1])
+    ## Position of the annual minimum
+    MinPos = which.min(P[Years == (min(Years) + i - 1)])
+    P_YMin[i, 1] = P[Years == (min(Years) + i - 1)][MinPos]
+    P_YMin[i, 2] = lubridate::yday(Date[MinPos])
+    MaxPos = which.max(P[Years == (min(Years) + i - 1)])
+    P_YMax[i, 1] = P[Years == (min(Years) + i - 1)][MaxPos]
+    P_YMax[i, 2] = lubridate::yday(Date[MaxPos])
+    for (j in 1:12) {
+      matrixPM1[j, i] = sum(P[Years == (min(Years) + i - 1) & Months == j])
+      sizePM1[j, i] = length(P[Years == (min(Years) + i - 1) & Months == j])
+    }
+  }
+
+  ## P_Avg_Month = nansum(matrixPM1.*sizePM1,2)./nansum(sizePM1,2);
+  P_Avg_Month = NA # TODO
+  P_Avg_Year = mean(P_Year)
+
+  P_Month = matrixPM1 # TODO
+  P_Matrix = matrixPM1 # TODO
+  ## P_Month = matrixPM1(:);
+  ## P_Matrix = matrixPM1';
+  ## P_Year = [(min(Years):max(Years))' , P_Year];
+  ## P_YMin = [(min(Years):max(Years))' , P_YMin];
+  ## P_YMax = [(min(Years):max(Years))' , P_YMax];
+  ## TODO plotting
+}
+
+## %% PLOT RESULTS
+## if nargin >= 3
+##     figure
+##     subplot(3,1,1)
+##     bar((1:length(P_Month))',P_Month,'DisplayName',inputname(2));
+##     hold on
+##     grid on
+##     box on
+##     title('Monthly data')
+##     legend('show')
+##     ylabel('Precipitation [mm]')
+##     set(gca,'XTick',(1:length(P_Month)),...
+##         'XTickLabel',{'J','F','M','A','M','J','J','A','S','O','N','D'});
+
+##     subplot(3,1,2)
+##     bar((1:12)',P_Avg_Month,'DisplayName',inputname(2));
+##     hold on
+##     P_MatrixPlot = cat(1,nan(1,12),P_Matrix,nan(1,12));
+##     boxplot(P_MatrixPlot,'PlotStyle','compact')
+##     grid on
+##     box on
+##     title('Average monthly data')
+##     legend('show')
+##     ylabel('Precipitation [mm]')
+##     set(gca,'Xlim',[0 13],...
+##         'XTickLabel',{'J','F','M','A','M','J','J','A','S','O','N','D'},...
+##         'XTick',(1:12));
+
+##     subplot(3,1,3)
+##     bar(P_Year(:,1),P_Year(:,2),'DisplayName',inputname(2));
+##     hold on
+##     box on
+##     title('Annual data')
+##     legend('show')
+##     ylabel('Precipitation [mm]')
+
+##     drawnow
+## end
+
+idc <- function(Date, P) {
+  ## %iMHEA Calculation of Maximum Intensity-Duration Curve.
+  ## % [IDC,iM15m,iM1hr] = iMHEA_IDC(Date,P,flag).
+  ## %
+  ## % Input:
+  ## % Date = dd/mm/yyyy hh:mm:ss [date format].
+  ## % P    = Precipitation [mm].
+  ## % flag = leave empty NOT to graph plots.
+  ## %
+  ## % Output:
+  ## % IDC   = Maximum Intensity - Duration Curve [mm/h v time].
+  ## % iM15m = Maximum precipitation intensity (15 min scale) [mm/h].
+  ## % iM1hr = Maximum precipitation intensity (1 hour scale) [mm/h].
+  ## %
+  ## % Boris Ochoa Tocachi
+  ## % Imperial College London
+  ## % Created in July, 2015
+  ## % Last edited in November, 2017
+
+  ## % Maximum Intensity - Duration Curve.
+  ## h = waitbar(0,'Calculating IDC...');
+  ## % Consider periods only when data exists.
+  VP = P
+  ## Check if the measurements have 5 min interval
+  if (round(median(diff(Date))) != 300) {
+    ## Consider periods only when data exists
+    VDate = Date[!is.na(VP)]
+    VP = VP[!is.na(VP)]
+    VDate = VDate[!VP == 0]
+    VP = VP[!VP == 0]
+    ## Aggregate data to 5 min interval [iMHEA standard?]
+    ## [~,VP] = iMHEA_Aggregation(VDate,VP,5);
+    aggregation(VDate, VP, 5) # TODO 5 mins
+  } else {
+    ## % Consider periods only when data exists.
+    VP[is.na(VP)] = 0
+  }
+  k1 = length(VP)
+  ## % Durations: 5, 10, 15, 30, 60 min; 2, 4, 12, 24 hours; 2 days.
+  D = c(1, 2, 3, 6, 12, 24, 48, 144, 288, 576)
+  u = rep(0, k1)
+  IDC = matrix(data = 0, nrow = length(D), ncol = 2)
+  IDC[,1] = D * 5 # TODO
+  ## Maximum intensities
+  for (i in 1:length(D)) {
+    ## % Define initial IntP(1).
+    u[1] = sum(VP[1:D[i]]) # The sum of the first i elements
+    ## Sums i elements using a moving window
+    for (j in 2:(k1 - D[i] + 1)) {
+      u[j] = u[j-1] + VP[j + D[i] - 1] - VP[j-1]
+    }
+    IDC[i, 2] = max(u) * 12 / D[i]
+    IDC[i, 3] = mean(u[u > 1e-12]) * 12 / D[i]
+    IDC[i, 4] = median(u[u > 1e-12]) * 12 / D[i]
+    ## IDC(i,4) = median(u(u>1E-12),'omitnan')*12/D(i);
+  }
+
+  ## % Intensity indices.
+  iM15m = IDC[D == 3, 2]  # 5 * 3 = 15 min
+  iM1hr = IDC[D == 12, 2] # 5 * 12 = 60 min = 1h
+  ## TODO plots
+}
