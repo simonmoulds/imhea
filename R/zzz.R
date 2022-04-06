@@ -3,5 +3,5 @@
 }
 
 .onAttach <- function(libname, pkgname) {
-  packageStartUpMessage("Welcome to imhea!")
+  packageStartupMessage("Welcome to imhea!")
 }

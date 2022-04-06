@@ -23,8 +23,8 @@
 #' }
 rain_gauge <- function(file,
                        tz = "Etc/GMT-5",
-                       lat,
-                       lon,
+                       lat = NA,
+                       lon = NA,
                        gauge_type,
                        bucket_volume = 0.2,
                        date_column = "Date",
@@ -1127,7 +1127,8 @@ average <- function(Date, Q, scale) {
   for (i in j:n) {
     l = 0 # Interval data counter
     ## Aggregate values
-    while (j <= k ** Date[j] < NewDate[i]) {
+    ## while j<=k && nd*Date(j)<=NewDate(i) % && nd*Date(j)>NewDate(i-1)
+    while (j <= k && Date[j] <= NewDate[i]) {
       NewQ[i] = NewQ[i] + Q[j]
       j = j+1
       l = l+1
