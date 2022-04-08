@@ -16,6 +16,45 @@ iMHEA_Catchment_AREA = read_csv(
   show_col_types = FALSE
 )
 
+## TODO add this to package
+valid_timezones <- function() return(OlsonNames())
+imhea_to_tsibble <- function(x,
+                             date_column = "Date",
+                             date_format = "%d/%m/%Y %H:%M:%S",
+                             tz = "Etc/GMT-5") {
+  stopifnot(date_column %in% names(x))
+  stopifnot(tz %in% valid_timezones())
+  x =
+    x %>%
+    rename(Date = date_column) %>%
+    mutate(Date = as.POSIXct(Date, tz = tz, format = date_format)) %>%
+    rowid_to_column() %>%
+    as_tsibble(key = rowid, index = Date, regular = FALSE)
+  x
+}
+
+tipping_bucket_rain_gauge <- function(x,
+                                      date_column = "Date",
+                                      date_format = "%d/%m/%Y %H:%M:%S",
+                                      tz = "Etc/GMT-5",
+                                      event_column = "Event mm",
+                                      flag_column = "Flag",
+                                      raw = TRUE,
+                                      ...) {
+
+  stopifnot(date_column %in% names(x))
+  stopifnot(event_column %in% names(x))
+  x = x %>% rename(Date = date_column, Event = event_column)
+  x = x %>% imhea_to_tsibble(date_column, ...)
+  if (!raw) {
+    class(x) <- c("tipping_bucket_rain_gauge", class(x))
+    return(x)
+  }
+  ## TODO
+  class(x) <- c("tipping_bucket_rain_gauge", class(x))
+  return(x)
+}
+
 ## LLO_01
 ## iMHEA_LLO_01_01_HI_01_raw =
 q1 = read_csv(
@@ -36,13 +75,10 @@ p2 = read_csv(
 )
 
 ## Do some initial data preparation
-## TODO helper function to convert many objects to tsibble objects
-tz <- "Etc/GMT-5"
-p1 <-
-  p1 %>%
-  mutate(Date = as.POSIXct(Date, tz = tz, format = "%d/%m/%Y %H:%M:%S")) %>%
-  mutate(key = seq(1, nrow(p1)))
-p1 <- p1 %>% as_tsibble(key = key, index = Date, regular = FALSE)
+p1 <- p1 %>% tipping_bucket_rain_gauge() %>% depure()
+p2 <- p2 %>% tipping_bucket_rain_gauge() %>% depure()
+
+## TODO set verbosity of package
 
 ## iMHEA_Depure comparison
 matlab_output_p1 = read_csv("inst/testdata/matlab_depure_output_llo_p1.csv")
