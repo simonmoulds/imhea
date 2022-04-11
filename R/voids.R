@@ -19,6 +19,8 @@ identify_voids <- function(x, ...) {
   NoVoids = Voids
   v = 1
   nv = 1
+
+  Date <- c(Date, rev(Date)[1])
   ## Determine data gaps
   for (jv in 1:k) {
     if (is.na(Data[jv])) {
@@ -45,9 +47,58 @@ identify_voids <- function(x, ...) {
       nv = nv + 1
     }
   }
-  Voids = na.omit(Voids$a)
-  NoVoids = na.omit(NoVoids$a)
-  ## list(Voids=Voids, NoVoids=NoVoids)
+  Voids = na.omit(Voids)
+  NoVoids = na.omit(NoVoids)
+  print(NoVoids)
+  message(sprintf("Identification of data gaps:"))
+  message(sprintf("Data:\tInitial Date\t\tFinal Data"))
+  for (i in 1:(nv - 1)) {
+    message(sprintf("\t%s\t%s", NoVoids[i,1], NoVoids[i,2]))
+  }
+  message(sprintf("Voids:\tInitial Date\t\tFinal Data"))
+  for (i in 1:(v - 1)) {
+    message(sprintf("\t%s\t%s", Voids[i,1], Voids[i,2]))
+  }
+  ## %% PRINT RESULTS
+  ## if nargin >= 3
+  ##     fprintf('\n')
+  ##     fprintf('IDENTIFICATION OF DATA GAPS.\n')
+  ##     fprintf('\n')
+  ##     fprintf('Data:\tInitial Date\t\tFinal Date\n')
+  ##     for i = 1:nv
+  ##     fprintf('\t')
+  ##     fprintf(datestr(NoVoids(i,1)))
+  ##     fprintf('\t')
+  ##     fprintf(datestr(NoVoids(i,2)))
+  ##     fprintf('\n')
+  ##     end
+  ##     fprintf('\n')
+  ##     fprintf('Voids:\tInitial Date\t\tFinal Date\n')
+  ##     for i = 1:v
+  ##     fprintf('\t')
+  ##     fprintf(datestr(Voids(i,1)))
+  ##     fprintf('\t')
+  ##     fprintf(datestr(Voids(i,2)))
+  ##     fprintf('\n')
+  ##     end
+  ##     fprintf('\n')
+  ## end
+
+  ## %% PLOT RESULTS - TODO method of rain_gauge
+  ## if nargin >= 4
+  ##     figure
+  ##     hold on
+  ##     Y = -0.5*ones(2,nv);
+  ##     Z = -ones(2,v);
+  ##     plot(NoVoids',Y,'b','LineWidth',1.5,'DisplayName','Data');
+  ##     plot(Voids',Z,'r','LineWidth',1.5,'DisplayName','Voids');
+  ##     datetick('x','dd/mm/yyyy','keepticks')
+  ##     title('Data Assessment')
+  ##     legend('show')
+  ##     legend('location','SouthWest'); legend('boxoff')
+  ##     set(gca,'YTickLabel',[],'Ylim',[-2 0.5])
+  ##     box on
+  ## end
   Voids
 }
 

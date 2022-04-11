@@ -146,7 +146,9 @@ p1 <- p1 %>% aggregation_cs() # TODO
 p2 <- p2 %>% aggregation_cs() # TODO
 
 ## Test voids function [this is usually called within aggregation function]
-Voids = identify_voids(Event_Date, Event_mm)
+Voids = identify_voids(p1) # FIXME this works as expected but is very slow - make dplyr solution
+## d <- data.frame(a = seq(1,20), b = c(runif(3), rep(NA, 4), runif(3), rep(NA, 3), runif(6), rep(NA, 1)))
+## d %>% filter(is.na(b)) %>% mutate(c = c(2, diff(a))) %>% mutate(d = ifelse(c>1,a,b)) %>% mutate(e = ifelse(lead(c)>1, a, b)) %>% mutate(d = na.locf(d, na.rm = T), e = na.locf(e, na.rm = F, fromLast = TRUE))
 
 ## Original MATLAB version
 ## %% AGGREGATE PRECIPITATION DATA TO MATCH DISCHARGE INTERVAL
