@@ -141,12 +141,70 @@ q1 <-
 ## Note int_length(int_diff(...)) always returns seconds
 int_HRes <- median(int_length(int_diff(q1[[index(q1)]])))
 ## Number of intervals per day
-nd <- 86400 / int_HRes
-p1 <- p1 %>% aggregation_cs() # TODO
-p2 <- p2 %>% aggregation_cs() # TODO
+## nd <- 86400 / int_HRes
+## p1 <- p1 %>% aggregation_cs() # TODO
+## p2 <- p2 %>% aggregation_cs() # TODO
 
-## Test voids function [this is usually called within aggregation function]
-Voids = identify_voids(p1) # FIXME this works as expected but is very slow - make dplyr solution
+## Test some of the functions called within aggregation_cs(...)
+## Setup [from aggregation_cs(...)]
+x <- p1
+bucket <- set_units(0.2, "mm")
+Event_Date <- x[["Date"]]
+Event_mm <- x[["Event"]]
+Minint = set_units(0.2, "mm/h")
+Maxint = set_units(127, "mm/h")
+Meanint = set_units(3, "mm/h")
+Lowint = min(set_units(0.1, "mm/h"), Minint / 2) # FIXME [mm min^{-1}]
+Event_Date = Event_Date + seconds(0.25)
+## Test identify_voids(...) function
+Voids = identify_voids(p1) # FIXME - works, but is very slow
+## Event_Date = Event_Date # datenum(Event_Date)
+NewEvent_Date = Event_Date
+NewEvent_mm = Event_mm
+NewEvent_Date = NewEvent_Date[!is.na(NewEvent_mm)]
+NewEvent_mm = NewEvent_mm[!is.na(NewEvent_mm)]
+
+## Test aggregate_events(...) and merge_events(...)
+## Maximum tip interval to separate events.
+## N.B.
+## * [bucket / Minint] gives the minimum time between tips in hours
+## * multiplying by [60 * (1 / nd)] converts to days
+## * we actually want the units in seconds, so instead of multiplying
+##   by [60 * (1 / nd)], we multiply by 3600
+MaxT = set_units(bucket, "mm") / set_units(Minint, "mm/s")
+## Minimum tip interval to merge events.
+MinT = set_units(bucket, "mm") / set_units(Maxint, "mm/s")
+## % Aggregate events to avoid large intensities
+mintip = TRUE
+## if (mintip) {
+## Aggregate data at 1-min scale [WORKING]
+x_aggr <- aggregate_events(NewEvent_Date, NewEvent_mm)
+## } else {
+## Merge rainfall tips occurring at extremely short periods [WORKING, but not tested properly with this dataset]
+x_aggr = merge_events(NewEvent_Date, NewEvent_mm, MinT)
+stop()
+## }
+## TODO work with dataframes throughout
+NewEvent_Date = x_aggr$Date; NewEvent_mm = x_aggr$Prec
+## if mintip == true
+##     % Aggregate data at 1-min scale.
+##     [NewEvent_Date,NewEvent_mm] = AggregateEvents(NewEvent_Date,NewEvent_mm);
+## else
+##     % Merge rainfall tips occurring at extremely short periods.
+##     [NewEvent_Date,NewEvent_mm] = MergeEvents(NewEvent_Date,NewEvent_mm,MinT);
+## end
+## % Adding a supporting initial extreme to avoid crashing the code later.
+NewEvent_Date = c(Event_Date[1] - seconds(MaxT), NewEvent_Date)
+NewEvent_mm = c(0, NewEvent_mm)
+## NewEvent_Date = cat(1,Event_Date(1)-MaxT,NewEvent_Date);
+## NewEvent_mm = cat(1,0,NewEvent_mm);
+## % Redistribute rainfall tips occurring at relatively long periods.
+x = divide_events(NewEvent_Date, NewEvent_mm, MaxT)
+stop()
+NewEvent_Date = x$Date; NewEvent_mm = x$Prec
+
+stop()
+
 ## d <- data.frame(a = seq(1,20), b = c(runif(3), rep(NA, 4), runif(3), rep(NA, 3), runif(6), rep(NA, 1)))
 ## d %>% filter(is.na(b)) %>% mutate(c = c(2, diff(a))) %>% mutate(d = ifelse(c>1,a,b)) %>% mutate(e = ifelse(lead(c)>1, a, b)) %>% mutate(d = na.locf(d, na.rm = T), e = na.locf(e, na.rm = F, fromLast = TRUE))
 

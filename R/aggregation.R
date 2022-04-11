@@ -464,71 +464,32 @@ aggregation_cs <- function(x,
 
 aggregate_events <- function(Event_Date, Event_mm) {
   ## Agregate rainfall at 1-min intervals.
-  ## DI = floor_date(min(Event_Date), unit = "minute")
-  ## DF = ceiling_date(max(Event_Date), unit = "minute")
-  ## NewDate_1min = seq(DI, DF, by = "1 min")
+  initial_rainfall_volume = sum(Event_mm, na.rm = TRUE)
   x =
     tibble(Date = Event_Date, Prec = Event_mm) %>%
     mutate(Date = floor_date(Event_Date, unit = "minute")) %>%
     group_by(Date) %>%
     summarise(Prec = sum(Prec))
+  aggregated_rainfall_volume <- sum(x$Prec, na.rm = TRUE)
+  message(sprintf("Routine for aggregating tips at 1-min time interval"))
+  message(sprintf("New number of data points: %4i", nrow(x)))
+  message(sprintf("Rainfall volume before aggregation: %8.2f mm", initial_rainfall_volume))
+  message(sprintf("Rainfall volume after aggregation: %8.2f mm", aggregated_rainfall_volume))
   x
-  ## ## DI = floor(min(Event_Date))*nd; # % Initial date [day]
-  ## ## DF = ceil(max(Event_Date))*nd; # % Final date [day]
-  ## ## NewDate_1min = seq(DI, DF, by=1)
-  ## ## NewDate_1min = (DI:DF)'; % Equally spaced time interval
-  ## n = length(NewDate_1min); # % Number of 1-min intervals
-  ## NewP_1min = rep(0, length(NewDate_1min))
-  ## ## ## NewP_1min = zeros(size(NewDate_1min)); # % Initialise aggregation
-  ## ## if (nd * Event_Date[1] == NewDate_1min[1]) {
-  ## ##   j = 2 # Data counter
-  ## ##   NewP_1min[1] = Event_mm[1]
-  ## ## } else {
-  ## ##   j = 1 # Data counter
-  ## ## }
-  ## for (i in 2:n) {
-  ##   ## Aggregate values
-  ##   while (j <= k & nd * Event_Date[j] <= NewDate_1min[i]) {
-  ##     NewP_1min[i] = NewP_1min[i] + Event_mm[j]
-  ##     j = j+1
-  ##   }
-  ## }
-  ## ## if nd*Event_Date(1)==NewDate_1min(1)
-  ## ##     j = 2; % Data counter
-  ## ##     NewP_1min(1) = Event_mm(1);
-  ## ## else
-  ## ##     j = 1; % Data counter
-  ## ## end
-  ## ## for i = 2:n
-  ## ##     % Aggregate values.
-  ## ##     while j<=k && nd*Event_Date(j)<=NewDate_1min(i) % && nd*Event_Date(j)>NewDate_1min(i-1)
-  ## ##         NewP_1min(i) = NewP_1min(i) + Event_mm(j);
-  ## ##         j = j+1;
-  ## ##     end
-  ## ## end
-  ## NewDate_1min = NewDate_1min/nd; # % Rescale the date
-  ## ## % Delete zero events to help process relevant data only.
-  ## NewDate_1min = NewDate_1min[!NewDate_1min == 0]
-  ## NewP_1min = NewP_1min[!NewP_1min == 0]
-  ## ## NewDate_1min(NewP_1min==0) = [];
-  ## ## NewP_1min(NewP_1min==0) = [];
-  ## fprintf('Routine for aggregating tips at 1-min time interval.\n')
-  ## fprintf('New number of data points: %4i.\n',length(NewP_1min))
-  ## fprintf('Rainfall volume before aggregation: %8.2f mm.\n',nansum(Event_mm))
-  ## fprintf('Rainfall volume after aggregation: %8.2f mm.\n',nansum(NewP_1min))
-  ## fprintf('\n')
 }
 
 
 merge_events <- function(Event_Date, Event_mm, MinT) {
   ## Delete tips for small periods.
+  initial_rainfall_volume <- sum(Event_mm, na.rm = TRUE)
   x =
     tibble(Date = Event_Date, Prec = Event_mm) %>%
     mutate(
-      interval = c(int_length(int_diff(Date)), MinT * 100),
+      interval = set_units(c(int_length(int_diff(Date)), MinT * 100), "s"),
       event_count = seq(1, n())
     ) %>%
-    mutate(event_count = ifelse(interval < MinT, lead(event_count), event_count)) #%>%
+    mutate(event_count = ifelse(interval < MinT, lead(event_count), event_count))
+
   x_merged =
     x %>%
     group_by(event_count) %>%
@@ -538,6 +499,12 @@ merge_events <- function(Event_Date, Event_mm, MinT) {
       by = "event_count"
     ) %>%
     dplyr::select(Date, Prec, -event_count)
+  merged_rainfall_volume <- sum(x_merged$Prec, na.rm = TRUE)
+  i = 1; j = 1 # FIXME
+  message(sprintf('Routine for merging tips occurring faster than MinT = %6.2f seconds', MinT))
+  message(sprintf('Number of tips removed: %4i.\n',i-j))
+  message(sprintf('Rainfall volume before merging: %8.2f mm', initial_rainfall_volume))
+  message(sprintf('Rainfall volume after merging: %8.2f mm', merged_rainfall_volume))
   x_merged
   ## ## Length of time between tips in seconds
   ## Diff_Event_Date = int_length(int_diff(Event_Date))
