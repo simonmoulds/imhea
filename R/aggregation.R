@@ -465,10 +465,6 @@ aggregation_cs <- function(x,
 aggregate_events <- function(Event_Date, Event_mm) {
   ## Agregate rainfall at 1-min intervals.% Agregate rainfall at 1-min intervals.
   k = length(Event_mm)
-  ## nd = 1440; % Number of minutes per day or numeric value of 1 minute: 1/1440
-  ## % Build a 1 minute cumulative rainfall curve
-  ## DI = floor_date(min(Event_Date), "minute") #* nd #% Initial date [day]
-  ## DF = ceiling_date(max(Event_Date), "minute") # * nd #% Final date [day]
   DI = floor_date(min(Event_Date), "day") #* nd #% Initial date [day]
   DF = ceiling_date(max(Event_Date), "day") # * nd #% Final date [day]
   NewDate_1min = seq(DI, DF, by = "1 min") #' # % Equally spaced time interval
@@ -476,10 +472,10 @@ aggregate_events <- function(Event_Date, Event_mm) {
   n = length(NewDate_1min) #; % Number of 1-min intervals
   NewP_1min = rep(0, length(NewDate_1min)) # % Initialise aggregation
   if (Event_Date[1] == NewDate_1min[1]) {
-      j = 2 #; % Data counter
+      j = 2 # Data counter
       NewP_1min[1] = Event_mm[1]
   } else {
-      j = 1 #; % Data counter
+      j = 1 # Data counter
   }
   for (i in 2:n) {
     ## Aggregate values
@@ -491,12 +487,6 @@ aggregate_events <- function(Event_Date, Event_mm) {
   zero_idx = NewP_1min == 0
   NewDate_1min = NewDate_1min[!zero_idx]
   NewP_1min = NewP_1min[!zero_idx]
-  ## fprintf('Routine for aggregating tips at 1-min time interval.\n')
-  ## fprintf('New number of data points: %4i.\n',length(NewP_1min))
-  ## fprintf('Rainfall volume before aggregation: %8.2f mm.\n',nansum(Event_mm))
-  ## fprintf('Rainfall volume after aggregation: %8.2f mm.\n',nansum(NewP_1min))
-  ## fprintf('\n')
-
   ## initial_rainfall_volume = sum(Event_mm, na.rm = TRUE)
   ## x =
   ##   tibble(Date = Event_Date, Prec = Event_mm) %>%
