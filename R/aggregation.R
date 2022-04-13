@@ -463,19 +463,52 @@ aggregation_cs <- function(x,
 }
 
 aggregate_events <- function(Event_Date, Event_mm) {
-  ## Agregate rainfall at 1-min intervals.
-  initial_rainfall_volume = sum(Event_mm, na.rm = TRUE)
-  x =
-    tibble(Date = Event_Date, Prec = Event_mm) %>%
-    mutate(Date = floor_date(Event_Date, unit = "minute")) %>%
-    group_by(Date) %>%
-    summarise(Prec = sum(Prec))
-  aggregated_rainfall_volume <- sum(x$Prec, na.rm = TRUE)
+  ## Agregate rainfall at 1-min intervals.% Agregate rainfall at 1-min intervals.
+  k = length(Event_mm)
+  ## nd = 1440; % Number of minutes per day or numeric value of 1 minute: 1/1440
+  ## % Build a 1 minute cumulative rainfall curve
+  ## DI = floor_date(min(Event_Date), "minute") #* nd #% Initial date [day]
+  ## DF = ceiling_date(max(Event_Date), "minute") # * nd #% Final date [day]
+  DI = floor_date(min(Event_Date), "day") #* nd #% Initial date [day]
+  DF = ceiling_date(max(Event_Date), "day") # * nd #% Final date [day]
+  NewDate_1min = seq(DI, DF, by = "1 min") #' # % Equally spaced time interval
+  print(length(NewDate_1min))
+  n = length(NewDate_1min) #; % Number of 1-min intervals
+  NewP_1min = rep(0, length(NewDate_1min)) # % Initialise aggregation
+  if (Event_Date[1] == NewDate_1min[1]) {
+      j = 2 #; % Data counter
+      NewP_1min[1] = Event_mm[1]
+  } else {
+      j = 1 #; % Data counter
+  }
+  for (i in 2:n) {
+    ## Aggregate values
+    while (j <= k & Event_Date[j] <= NewDate_1min[i]) {
+      NewP_1min[i] = NewP_1min[i] + Event_mm[j]
+      j = j+1
+    }
+  }
+  zero_idx = NewP_1min == 0
+  NewDate_1min = NewDate_1min[!zero_idx]
+  NewP_1min = NewP_1min[!zero_idx]
+  ## fprintf('Routine for aggregating tips at 1-min time interval.\n')
+  ## fprintf('New number of data points: %4i.\n',length(NewP_1min))
+  ## fprintf('Rainfall volume before aggregation: %8.2f mm.\n',nansum(Event_mm))
+  ## fprintf('Rainfall volume after aggregation: %8.2f mm.\n',nansum(NewP_1min))
+  ## fprintf('\n')
+
+  ## initial_rainfall_volume = sum(Event_mm, na.rm = TRUE)
+  ## x =
+  ##   tibble(Date = Event_Date, Prec = Event_mm) %>%
+  ##   mutate(Date = floor_date(Event_Date, unit = "minute")) %>%
+  ##   group_by(Date) %>%
+  ##   summarise(Prec = sum(Prec))
+  ## aggregated_rainfall_volume <- sum(x$Prec, na.rm = TRUE)
   message(sprintf("Routine for aggregating tips at 1-min time interval"))
-  message(sprintf("New number of data points: %4i", nrow(x)))
-  message(sprintf("Rainfall volume before aggregation: %8.2f mm", initial_rainfall_volume))
-  message(sprintf("Rainfall volume after aggregation: %8.2f mm", aggregated_rainfall_volume))
-  x
+  message(sprintf("New number of data points: %4i", length(NewP_1min)))
+  message(sprintf("Rainfall volume before aggregation: %8.2f mm", sum(Event_mm, na.rm = TRUE)))
+  message(sprintf("Rainfall volume after aggregation: %8.2f mm", sum(NewP_1min, na.rm = TRUE)))
+  tibble(Date = NewDate_1min, Prec = NewP_1min)
 }
 
 
@@ -556,9 +589,9 @@ divide_events <- function(Event_Date, Event_mm, MaxT) {
   ## Event_mm = yy
   ## Event_Date = NewEvent_Date
   ## Event_mm = NewEvent_mm
-  diff_event_date = int_length(int_diff(Event_Date))
+  diff_event_date = set_units(int_length(int_diff(Event_Date)), "s")
   event_diff = diff_event_date > MaxT
-  half_event_diff = diff_event_date > MaxT / 2
+  half_event_diff = diff_event_date > (MaxT / 2)
   ## Redistribute rainfall over relatively long periods
   ## i.e. lower than MaxT but greater than MaxT/2
   NewEvent_Date = Event_Date
@@ -569,17 +602,24 @@ divide_events <- function(Event_Date, Event_mm, MaxT) {
     ## TODO check this index against MATLAB
     if (half_event_diff[i-1] & !event_diff[i-1] & (!event_diff[i] | !isTRUE(event_diff[i-2]))) {
       halftip_mm = Event_mm[i] / 2
-      t0 = Event_Date[i] - diff_event_date[i-1] / 2
+      t0 = Event_Date[i] - seconds(diff_event_date[i-1] / 2)
       ## Include these data in the rainfall tip time series
-      NewEvent_Date = c(NewEvent_Date[1:(j-1)], t0, NewEvent_Date[j:length(NewEvent_Date)])
-      NewEvent_mm = c(NewEvent_mm[1:(j-1)], halftip_mm, halftip_mm, NewEvent_mm[(j+1):length(NewEvent_mm)])
+      NewEvent_Date = c(
+        NewEvent_Date[1:(j-1)],
+        t0, NewEvent_Date[j:length(NewEvent_Date)]
+      )
+      NewEvent_mm = c(
+        NewEvent_mm[1:(j-1)],
+        halftip_mm, halftip_mm,
+        NewEvent_mm[(j+1):length(NewEvent_mm)]
+      )
       j = j + 1
     }
   }
-  ## fprintf('Routine for spreading tips occurring between %6.2f and %6.2f minutes.\n',MaxT*1440/2,MaxT*1440)
-  ## fprintf('Number of tips added: %4i.\n',j-i)
-  ## fprintf('Rainfall volume before spreading: %8.2f mm.\n',nansum(Event_mm))
-  ## fprintf('Rainfall volume after spreading: %8.2f mm.\n',nansum(NewEvent_mm))
-  ## fprintf('\n')
+  MaxT_minutes <- set_units(MaxT, "minute")
+  message(sprintf("Routing for spreading tips occurring between %6.2f and %6.2f minutes", MaxT_minutes, MaxT_minutes))
+  message(sprintf("Number of tips added: %4i", j-i))
+  message(sprintf("Rainfall volume before spreading: %8.2f mm", sum(Event_mm, na.rm = TRUE)))
+  message(sprintf("Rainfall volume after spreading: %8.2f mm", sum(NewEvent_mm, na.rm = TRUE)))
   tibble(Date = NewEvent_Date, Prec = NewEvent_mm)
 }

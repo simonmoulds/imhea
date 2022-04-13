@@ -155,12 +155,13 @@ Minint = set_units(0.2, "mm/h")
 Maxint = set_units(127, "mm/h")
 Meanint = set_units(3, "mm/h")
 Lowint = min(set_units(0.1, "mm/h"), Minint / 2) # FIXME [mm min^{-1}]
-Event_Date = Event_Date + seconds(0.25)
+Event_Date = Event_Date - seconds(0.25)
 ## Test identify_voids(...) function
 Voids = identify_voids(p1) # FIXME - works, but is very slow
 ## Event_Date = Event_Date # datenum(Event_Date)
 NewEvent_Date = Event_Date
 NewEvent_mm = Event_mm
+NewEvent_mm[NewEvent_mm == 0] = NA
 NewEvent_Date = NewEvent_Date[!is.na(NewEvent_mm)]
 NewEvent_mm = NewEvent_mm[!is.na(NewEvent_mm)]
 
@@ -181,9 +182,8 @@ mintip = TRUE
 x_aggr <- aggregate_events(NewEvent_Date, NewEvent_mm)
 ## } else {
 ## Merge rainfall tips occurring at extremely short periods [WORKING, but not tested properly with this dataset]
-x_aggr = merge_events(NewEvent_Date, NewEvent_mm, MinT)
-stop()
-## }
+## x_aggr = merge_events(NewEvent_Date, NewEvent_mm, MinT)
+
 ## TODO work with dataframes throughout
 NewEvent_Date = x_aggr$Date; NewEvent_mm = x_aggr$Prec
 ## if mintip == true
@@ -199,8 +199,13 @@ NewEvent_mm = c(0, NewEvent_mm)
 ## NewEvent_Date = cat(1,Event_Date(1)-MaxT,NewEvent_Date);
 ## NewEvent_mm = cat(1,0,NewEvent_mm);
 ## % Redistribute rainfall tips occurring at relatively long periods.
+stop() # divide_events not currently working as expected - 444 tips added instead of 456
 x = divide_events(NewEvent_Date, NewEvent_mm, MaxT)
+
+## Event_Date = NewEvent_Date
+## Event_mm = NewEvent_mm
 stop()
+
 NewEvent_Date = x$Date; NewEvent_mm = x$Prec
 
 stop()
