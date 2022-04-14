@@ -575,10 +575,9 @@ merge_events <- function(Event_Date, Event_mm, MinT) {
 }
 
 divide_events <- function(Event_Date, Event_mm, MaxT) {
-  ## Event_Date = xx
-  ## Event_mm = yy
-  ## Event_Date = NewEvent_Date
-  ## Event_mm = NewEvent_mm
+  ## % Add additional tips for long periods [Wang et al, 2008].
+  ## % Calculate the time between tips.
+  ## Diff_Event_Date = diff(Event_Date);
   diff_event_date = set_units(int_length(int_diff(Event_Date)), "s")
   event_diff = diff_event_date > MaxT
   half_event_diff = diff_event_date > (MaxT / 2)
@@ -607,7 +606,35 @@ divide_events <- function(Event_Date, Event_mm, MaxT) {
     }
   }
   MaxT_minutes <- set_units(MaxT, "minute")
-  message(sprintf("Routing for spreading tips occurring between %6.2f and %6.2f minutes", MaxT_minutes, MaxT_minutes))
+  ## % Identify tips separated by more than the maximum time MaxT.
+  ## EventDiff = Diff_Event_Date > MaxT;
+  ## % Redistribute rainfall over relatively long periods but lower than MaxT.
+  ## % but greater than half MaxT.
+  ## HalfEventDiff = Diff_Event_Date > MaxT/2;
+  ## % Modified variables to process.
+  ## NewEvent_Date = Event_Date;
+  ## NewEvent_mm = Event_mm;
+  ## j = 1;
+  ## for i = 2:length(EventDiff)
+  ##     j = j+1;  % Index for NewEvent_mm.
+  ##     % When the time between tips is between half and one complete MaxT.
+  ##     % Be aware that ~EventDiff(i-2) may conflict with i = 2.
+  ##     if HalfEventDiff(i-1) && ~EventDiff(i-1) && (~EventDiff(i) || ~EventDiff(i-2))
+  ##         % Divide the following tip volume in two and assign a time stamp.
+  ##         Halftip_mm = Event_mm(i)/2;
+  ##         t0 = Event_Date(i) - Diff_Event_Date(i-1)/2;
+  ##         % Include these data in the rainfall tip time series.
+  ##         NewEvent_Date = cat(1,NewEvent_Date(1:j-1),t0,NewEvent_Date(j:end));
+  ##         NewEvent_mm = cat(1,NewEvent_mm(1:j-1),Halftip_mm,Halftip_mm,NewEvent_mm(j+1:end));
+  ##         j = j+1;
+  ##     end
+  ## end
+  ## fprintf('Routine for spreading tips occurring between %6.2f and %6.2f minutes.\n',MaxT*1440/2,MaxT*1440)
+  ## fprintf('Number of tips added: %4i.\n',j-i)
+  ## fprintf('Rainfall volume before spreading: %8.2f mm.\n',nansum(Event_mm))
+  ## fprintf('Rainfall volume after spreading: %8.2f mm.\n',nansum(NewEvent_mm))
+  ## fprintf('\n')
+  message(sprintf("Routing for spreading tips occurring between %6.2f and %6.2f minutes", MaxT_minutes / 2, MaxT_minutes))
   message(sprintf("Number of tips added: %4i", j-i))
   message(sprintf("Rainfall volume before spreading: %8.2f mm", sum(Event_mm, na.rm = TRUE)))
   message(sprintf("Rainfall volume after spreading: %8.2f mm", sum(NewEvent_mm, na.rm = TRUE)))

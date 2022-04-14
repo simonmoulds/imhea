@@ -114,7 +114,6 @@ p2_raw = read_csv(
   show_col_types = FALSE
 )
 
-
 ## Do some initial data preparation
 p1 <-
   p1_raw %>%
@@ -200,6 +199,11 @@ NewEvent_mm = c(0, NewEvent_mm)
 ## NewEvent_mm = cat(1,0,NewEvent_mm);
 ## % Redistribute rainfall tips occurring at relatively long periods.
 stop() # divide_events not currently working as expected - 444 tips added instead of 456
+length(NewEvent_Date)
+length(NewEvent_mm)
+matlab_input = read_csv("matlab_divide_events_input.csv")
+## NewEvent_mm is equal
+## TODO check dates - remove matlab formatting
 x = divide_events(NewEvent_Date, NewEvent_mm, MaxT)
 
 ## Event_Date = NewEvent_Date
