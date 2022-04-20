@@ -201,10 +201,35 @@ NewEvent_mm = c(0, NewEvent_mm)
 stop() # divide_events not currently working as expected - 444 tips added instead of 456
 length(NewEvent_Date)
 length(NewEvent_mm)
-matlab_input = read_csv("matlab_divide_events_input.csv")
+
+## This is the input to divide_events
+y <-
+  read_csv("matlab_divide_events_input.csv", col_names = FALSE) %>%
+  setNames(c("Date", "Prec")) %>%
+  mutate(Date = (Date - 719529) * 86400) %>%
+  mutate(Date = as.POSIXct(Date, tz = "UTC", origin = "1970-01-01")) %>%
+  mutate(Date = round_date(Date, unit = "0.25 seconds")) %>%
+  mutate(Date = force_tz(Date, "Etc/GMT-5"))
+
+x <- tibble(Date = NewEvent_Date, Prec = NewEvent_mm)
+all.equal(y, x)
+
 ## NewEvent_mm is equal
 ## TODO check dates - remove matlab formatting
-x = divide_events(NewEvent_Date, NewEvent_mm, MaxT)
+x <- divide_events(NewEvent_Date, NewEvent_mm, MaxT)
+
+## I think the cause of the slight discrepancy is a precision error,
+## which causes some events separated by exactly 30 minutes (MaxT / 2)
+## to be identified as greater than MaxT / 2.
+
+## Test aggregation_cs using these values:
+y <-
+  read_csv("matlab_divide_events_output.csv", col_names = FALSE) %>%
+  setNames(c("Date", "Prec")) %>%
+  mutate(Date = (Date - 719529) * 86400) %>%
+  mutate(Date = as.POSIXct(Date, tz = "UTC", origin = "1970-01-01")) %>%
+  mutate(Date = round_date(Date, unit = "0.25 seconds")) %>%
+  mutate(Date = force_tz(Date, "Etc/GMT-5"))
 
 ## Event_Date = NewEvent_Date
 ## Event_mm = NewEvent_mm
