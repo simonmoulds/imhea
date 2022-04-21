@@ -112,7 +112,8 @@ aggregation_cs <- function(x,
     x = merge_events(NewEvent_Date, NewEvent_mm, MinT)
   }
   ## TODO work with dataframes throughout
-  NewEvent_Date = x$Date; NewEvent_mm = x$Prec
+  NewEvent_Date = x$Date
+  NewEvent_mm = x$Prec
   ## if mintip == true
   ##     % Aggregate data at 1-min scale.
   ##     [NewEvent_Date,NewEvent_mm] = AggregateEvents(NewEvent_Date,NewEvent_mm);
@@ -127,7 +128,16 @@ aggregation_cs <- function(x,
   ## NewEvent_mm = cat(1,0,NewEvent_mm);
   ## % Redistribute rainfall tips occurring at relatively long periods.
   x = divide_events(NewEvent_Date, NewEvent_mm, MaxT)
-  NewEvent_Date = x$Date; NewEvent_mm = x$Prec
+  ## FOR TESTING:
+  x <-
+    read_csv("~/dev/imhea/matlab_divide_events_output.csv", col_names = FALSE) %>%
+    setNames(c("Date", "Prec")) %>%
+    mutate(Date = (Date - 719529) * 86400) %>%
+    mutate(Date = as.POSIXct(Date, tz = "UTC", origin = "1970-01-01")) %>%
+    mutate(Date = round_date(Date, unit = "0.25 seconds")) %>%
+    mutate(Date = force_tz(Date, "Etc/GMT-5"))
+  NewEvent_Date = x$Date
+  NewEvent_mm = x$Prec
   ## [NewEvent_Date,NewEvent_mm] = DivideEvents(NewEvent_Date,NewEvent_mm,MaxT);
   ## % Redistribute rainfall over relatively long periods slightly shorter.
   ## % [NewEvent_Date,NewEvent_mm] = DivideEvents(NewEvent_Date,NewEvent_mm,MaxT/2);
@@ -146,12 +156,20 @@ aggregation_cs <- function(x,
   ##     legend('off'); legend('show')
   ##     legend('location','SouthWest'); legend('boxoff')
   ## end
-
+  ## ## This gives the correct answer:
+  ## y = read_csv("matlab_diff_output.csv", col_names = FALSE)
+  ## yNewEventDiff = y[,1,drop=T]
+  ## ## yNewEvent_Date = y[,2,drop=T]
+  ## ## yindx = which(diff(yNewEvent_Date) > 1/24)
+  ## ## yindx = c(1, yindx + 1)
+  ## yindx = which(yNewEventDiff > 0)
   ## Identify events from tips separated by more than the maximum time MaxT.
-  NewEventDiff = int_length(int_diff(NewEvent_Date)) > MaxT
+  NewEventDiff = set_units(int_length(int_diff(NewEvent_Date)), "s") > MaxT
   NewEventDiff = c(TRUE, NewEventDiff) # Make first point the start of a new event
   ## `indx` represents the index of each new event
   indx = which(NewEventDiff)
+  y = read_csv("matlab_indx_output.csv", col_names = FALSE)[,1,drop = T]
+  ## Again, slight differences because of precision errors
   ## Number of elements per event
   ## [assumption that events lasting longer than MaxT are in fact a separate event?]
   n = diff(indx) - 1
@@ -163,10 +181,11 @@ aggregation_cs <- function(x,
   D_last = rev(NewEvent_Date)[1] - NewEvent_Date[indx[n_indx]]
   D = c(D, D_last)
   n1 = indx[n < 1] # Index of events with only 1 point
-  ## fprintf('Number of rainfall events identified: %6i.\n',length(indx))
-  ## fprintf('Average duration of the events: %8.2f min.\n',mean(D(D>0)))
-  ## fprintf('Rainfall events consisting of 1 tip only: %6i.\n',length(n1))
 
+  sprintf("Number of rainfall events identified: %6i", length(indx))
+  sprintf("Average duration of the events: %8.2f min", mean(D[D > 0]))
+  sprintf("Rainfall events consisting of 1 tip only: %6i", length(n1))
+  stop()
   ## FIT EVENTS AND AGGREGATING AT 1-min INTERVAL
   ## Build a 1 minute cumulative rainfall curve
   DI = floor_date(min(Event_Date), unit = "minute")
@@ -640,3 +659,19 @@ divide_events <- function(Event_Date, Event_mm, MaxT) {
   message(sprintf("Rainfall volume after spreading: %8.2f mm", sum(NewEvent_mm, na.rm = TRUE)))
   tibble(Date = NewEvent_Date, Prec = NewEvent_mm)
 }
+
+## x = c(1, 2, 9, 9, 2, 1, 1, 5, 5, 1)
+## x = c(1, 2, 9, NA, 2, 1, NA, 5, 5, 1)
+## localMin2 <- function(x) {
+##   finite_ix = which(!is.na(x))
+##   x = x[finite_ix]
+##   arms = diff(c(-.Machine$integer.max, -x)) > 0
+##   index.arms = cumsum(rle2(arms)$lengths)
+##   end.arms.true = index.arms[seq.int(from = 1, to = length(index.arms), by = 2)]
+##   if (x[1] == x[2]) {
+##       end.arms.true = end.arms.true[-1]
+##   }
+##   end.arms.true = finite_ix[end.arms.true]
+##   return(end.arms.true)
+## }
+## localMin2(x)
