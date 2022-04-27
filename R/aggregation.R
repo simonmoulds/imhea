@@ -128,6 +128,7 @@ aggregation_cs <- function(x,
   ## NewEvent_mm = cat(1,0,NewEvent_mm);
   ## % Redistribute rainfall tips occurring at relatively long periods.
   x = divide_events(NewEvent_Date, NewEvent_mm, MaxT)
+
   ## FOR TESTING:
   x <-
     read_csv("~/dev/imhea/matlab_divide_events_output.csv", col_names = FALSE) %>%
@@ -138,54 +139,30 @@ aggregation_cs <- function(x,
     mutate(Date = force_tz(Date, "Etc/GMT-5"))
   NewEvent_Date = x$Date
   NewEvent_mm = x$Prec
-  ## [NewEvent_Date,NewEvent_mm] = DivideEvents(NewEvent_Date,NewEvent_mm,MaxT);
-  ## % Redistribute rainfall over relatively long periods slightly shorter.
-  ## % [NewEvent_Date,NewEvent_mm] = DivideEvents(NewEvent_Date,NewEvent_mm,MaxT/2);
-  ## % Remove initial extreme to avoid crashing the code later.
-  ## NewEvent_Date(1) = [];
-  ## NewEvent_mm(1) = [];
+  ## Remove initial extreme to avoid crashing the code later - FIXME
   NewEvent_Date = NewEvent_Date[2:length(NewEvent_Date)]
   NewEvent_mm = NewEvent_mm[2:length(NewEvent_mm)]
-  ## if nargin > 6
-  ##     % Plot the new half tips
-  ##     plot(datetime(NewEvent_Date(NewEvent_mm~=bucket),'ConvertFrom','datenum'),...
-  ##         NewEvent_mm(NewEvent_mm~=bucket),'o','DisplayName','Auxiliary events')
-  ##     plot(datetime(Event_Date(Event_mm==0),'ConvertFrom','datenum'),...
-  ##         Event_mm(Event_mm==0),'xk','DisplayName','Zero intensity')
-  ##     set(gca,'Ylim',[-2 max(NewEvent_mm)+1])
-  ##     legend('off'); legend('show')
-  ##     legend('location','SouthWest'); legend('boxoff')
-  ## end
-  ## ## This gives the correct answer:
-  ## y = read_csv("matlab_diff_output.csv", col_names = FALSE)
-  ## yNewEventDiff = y[,1,drop=T]
-  ## ## yNewEvent_Date = y[,2,drop=T]
-  ## ## yindx = which(diff(yNewEvent_Date) > 1/24)
-  ## ## yindx = c(1, yindx + 1)
-  ## yindx = which(yNewEventDiff > 0)
-  ## Identify events from tips separated by more than the maximum time MaxT.
+
   NewEventDiff = set_units(int_length(int_diff(NewEvent_Date)), "s") > MaxT
   NewEventDiff = c(TRUE, NewEventDiff) # Make first point the start of a new event
-  ## `indx` represents the index of each new event
   indx = which(NewEventDiff)
-  y = read_csv("matlab_indx_output.csv", col_names = FALSE)[,1,drop = T]
+  ## y = read_csv("matlab_indx_output.csv", col_names = FALSE)[,1,drop = T]
   ## Again, slight differences because of precision errors
   ## Number of elements per event
-  ## [assumption that events lasting longer than MaxT are in fact a separate event?]
   n = diff(indx) - 1
   n_last = length(NewEvent_Date) - rev(indx)[1]
   n = c(n, n_last)
   ## Duration of the events in seconds
   n_indx = length(indx)
-  D = (NewEvent_Date[indx[2:n_indx] - 1] - NewEvent_Date[indx[1:(n_indx - 1)]]) #* 1440
+  D = (NewEvent_Date[indx[2:n_indx] - 1] - NewEvent_Date[indx[1:(n_indx - 1)]])
   D_last = rev(NewEvent_Date)[1] - NewEvent_Date[indx[n_indx]]
   D = c(D, D_last)
+  D = as.numeric(D, units = "mins")
   n1 = indx[n < 1] # Index of events with only 1 point
-
   sprintf("Number of rainfall events identified: %6i", length(indx))
   sprintf("Average duration of the events: %8.2f min", mean(D[D > 0]))
   sprintf("Rainfall events consisting of 1 tip only: %6i", length(n1))
-  stop()
+
   ## FIT EVENTS AND AGGREGATING AT 1-min INTERVAL
   ## Build a 1 minute cumulative rainfall curve
   DI = floor_date(min(Event_Date), unit = "minute")
@@ -196,45 +173,45 @@ aggregation_cs <- function(x,
   biased = rep(0, length(n))                 # Initialise bias vector
   bEvent = rep(0, length(n))                 # Initialise biased events counter
 
+  sprintf("Interpolating data...")
+  pb = txtProgressBar(min = 0, max = length(n), initial = 0)
   for (i in 1:length(n)) {
     ## Procedure:
-    ## % Events with more than 2 points (fit a CS) [Wang et al, 2008].
-    ## % Events with only 2 points (fit a line) [Ciach, 2003].
-    ## % Events with only 1 points (distribute at a rate of 3 mm h^{-1}) [Wang et al, 2008].
+    ## * Events with more than 2 points (fit a CS) [Wang et al, 2008].
+    ## * Events with only 2 points (fit a line) [Ciach, 2003].
+    ## * Events with only 1 points (distribute at a rate of 3 mm h^{-1}) [Wang et al, 2008].
     if (n[i] >= 1) {
       ## Relative time in seconds from the beginning of the event.
       x = (NewEvent_Date[indx[i] + (0:n[i])] - NewEvent_Date[indx[i]])
+      x = set_units(as.numeric(x, units = "secs"), "s")
       ## Cumulative rainfall during the event
       y = cumsum(NewEvent_mm[indx[i]:(indx[i] + n[i])])
+      y = set_units(y, "mm")
       if (halves) {
         ## Estimate initial point of the rainfall event
         ## Reduce half a second only to ensure correct initial data calculation
-        x0 = bucket * (x[2] - x[1]) / (y[2] - y[1]) - 0.5
+        x0 = bucket * (x[2] - x[1]) / (y[2] - y[1]) - set_units(0.5, "secs")
         xf = bucket * (rev(x)[1] - rev(x)[2]) / (rev(y)[1] - rev(y)[2])
         ## Allocate only 1-half tip at the start and end of event
         x = x + x0
         y = y - bucket / 2
-        y = c(0, y, rev(y)[1] + bucket / 2)
-        x = c(0, x, rev(x)[1] + xf)
+        ## FIXME make constants zero_mm <- set_units(0, "mm"); zero_secs <- set_units(0, "s")
+        y = c(set_units(0, "mm"), y, rev(y)[1] + bucket / 2)
+        x = c(set_units(0, "s"), x, rev(x)[1] + xf)
         x = round(x) # TODO check - would floor/ceiling be better?
 
         ## Aggregating data at 1-min interval starting at :00
         DI = max(DI, floor_date(NewEvent_Date[indx[i]] - x0, unit = "minute"))
         DF = ceiling_date(NewEvent_Date[indx[i] + n[i]] + xf)
         x1m = seq(DI, DF, by = "1 min") - NewEvent_Date[indx[i]] + x0 # Equally spaced time interval
-        ## x1m = round(60 * x1m) # Convert to seconds
       } else {
-        ## x0 = -0.5
         ## Aggregating data at 1-min interval starting at :00
         DI = max(DI, floor_date(NewEvent_Date[indx[i]] + seconds(0.5)))
         DF = ceiling_date(NewEvent_Date[indx[i] + n[i]])
         x1m = seq(DI, DF, by = "1 min") - NewEvent_Date[indx[i]]
-        ## x1m = round(60 * x1m) # Convert to seconds
       }
-
       ## % CS fitted to the current event and interpolated at 1-sec.
       ## % pp = spline(x,y); % yy = spline(x,y,xx);
-
       ## ## Experimenting with pracma::cubicspline
       ## ## Examples from https://uk.mathworks.com/help/matlab/ref/spline.html
       ## x = c(0, 1, 2.5, 3.6, 5, 7, 8.1, 10)
@@ -248,37 +225,46 @@ aggregation_cs <- function(x,
       ## xx = seq(-4, 4, length.out = 101)
       ## yy = cubicspline(x, y, xi=xx, endp2nd = TRUE, der = c(0, 0)) # OK!
       ## yy = spline(x, y, method='natural', xout=xx)
+
+      ## TODO need to check these functions rigorously
       if (halves) {
-        ## % Set the estimated zero rate endpoints first derivatives to 0
-        ## % [Sadler and Busscher, 1989].
-        ## pp = spline(x, c(0, y, 0)) # TODO check this
-        y1m = pracma::cubicspline(x, y, xi=as.numeric(x1m), endp2nd = TRUE, der = c(0, 0))
+        ## Set the estimated zero rate endpoints first derivatives to 0
+        ## [Sadler and Busscher, 1989].
+        y1m = pracma::cubicspline(
+                        as.numeric(x),
+                        as.numeric(y),
+                        xi = as.numeric(x1m),
+                        endp2nd = TRUE,
+                        der = c(0, 0)
+                      )
       } else {
-        ## % Set the endpoints second derivatives to 0 [Wang et al, 2008].
+        ## Set the endpoints second derivatives to 0 [Wang et al, 2008].
         ## N.B. a natural cubic spline is a cubic spline that sets second
         ## derivatives to zero at the end points.
         ## E.g. https://stats.stackexchange.com/q/322047
         ## pp = csape(x, y, 'second') # TODO
-        ## y1m = spline(x, y, method = 'hyman', xout = x1m)
         y1m = spline(x, y, method = 'natural', xout = x1m)
+        y1m = y1m$y
       }
+      y1m <- set_units(y1m, "mm") # FIXME check this
       ## ## The above spline routines work as in the MATLAB original,
       ## ## but can result in negative rainfall intensities. Using a
       ## ## monotonic spline prevents this:
       ## y1m = spline(c(x[1] - 60, x, rev(x)[1] + 60), c(y[1], y, rev(y)[1]), method = 'hyman', xout = x1m)
-
-      ## y1m = fnval(pp,x1m); # % Cumulative rainfall at each x1m TODO
       if (halves) {
         ## % Zero rainfall rates at borders.
         y1m[1] = 0
         y1m[length(y1m)] = y1m[length(y1m) - 1]
       }
       ## r1m = [y1m(1);diff(y1m)]; % Rainfall rate at each x1m [mm min^{-1}]
+      stop()
+      ## FIXME consider units!!!
+      ## FIXME return rate
       r1m = compute_rainfall_intensity(y1m) # Rainfall rate at each x1m [mm min^{-1}]
       ## % Correction for negative intensities and biased volumes.
-      ## TODO intCorrection(...)
       r2m = r1m
       bEvent = 0
+      ## FIXME y should have units
       bias = compute_bias(y, r1m)
       bEvent = bias > 0.25
       if (bEvent) {
@@ -286,6 +272,7 @@ aggregation_cs <- function(x,
         r2m = compute_rainfall_intensity(y2m)
         bias = compute_bias(y, r2m)
       }
+      ## FIXME y should have units
       r2m = correct_negative_rate(y, r2m, Lowint)
       y2m = compute_cumulative_rainfall_curve(y, r2m, halves)
       r2m = compute_rainfall_intensity(y2m)
@@ -294,7 +281,7 @@ aggregation_cs <- function(x,
       ix = NewDate_1min >= DI & NewDate_1min <= DF
       CumP_1min[ix] = CumP_1min[ix] + y2m
       CumP_1min[NewDate_1min > DF] = CumP_1min[NewDate_1min == DF]
-      ## TODO [only needed for plotting]
+      ## TODO [seems this section is only needed for plotting, which I think is probably unnecessary...]
       ## if (any(is.nan(r2m))) {
       ##   ## Calculations for event plots
       ##   ## TODO
@@ -410,7 +397,9 @@ aggregation_cs <- function(x,
       Single_1min[indx] = Single_1min[indx] + y1m
       Single_1min[NewDate_1min > DF] = Single_1min[NewDate_1min == DF]
     }
+    setTxtProgressBar(pb, i)
   }
+  close(pb)
   ## fprintf('Maximum bias corrected in event interpolation: %5.2f%%.\n',100*nanmax(biased))
   ## fprintf('%2i event(s) with bias >25%% interpolated linearly.\n',nansum(bEvent))
   ## fprintf('\n')
@@ -480,6 +469,7 @@ aggregation_cs <- function(x,
   ## fprintf('Rainfall volume after aggregation: %8.2f mm.\n',nansum(NewP))
   ## fprintf('\n')
 }
+
 
 aggregate_events <- function(Event_Date, Event_mm) {
   ## Agregate rainfall at 1-min intervals.% Agregate rainfall at 1-min intervals.

@@ -96,7 +96,7 @@ correct_bias <- function(x, y, x1m, r1m) {
 }
 
 compute_rainfall_intensity <- function(y1m) {
-  c(y1m[1], diff(y1m))
+  int <- set_units(c(y1m[1], diff(y1m)), "mm/h") # FIXME check this is correct
 }
 
 correct_negative_rate <- function(y, r1m, Lowint) {

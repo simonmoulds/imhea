@@ -218,22 +218,22 @@ all.equal(y, x)
 ## TODO check dates - remove matlab formatting
 x <- divide_events(NewEvent_Date, NewEvent_mm, MaxT)
 
-## I think the cause of the slight discrepancy is a precision error,
-## which causes some events separated by exactly 30 minutes (MaxT / 2)
-## to be identified as greater than MaxT / 2.
+## ## I think the cause of the slight discrepancy is a precision error,
+## ## which causes some events separated by exactly 30 minutes (MaxT / 2)
+## ## to be identified as greater than MaxT / 2.
 
-## Test aggregation_cs using these values:
-y <-
-  read_csv("matlab_divide_events_output.csv", col_names = FALSE) %>%
-  setNames(c("Date", "Prec")) %>%
-  mutate(Date = (Date - 719529) * 86400) %>%
-  mutate(Date = as.POSIXct(Date, tz = "UTC", origin = "1970-01-01")) %>%
-  mutate(Date = round_date(Date, unit = "0.25 seconds")) %>%
-  mutate(Date = force_tz(Date, "Etc/GMT-5"))
+## ## Test aggregation_cs using these values:
+# y <-
+#
+##   read_csv("matlab_divide_events_output.csv", col_names = FALSE) %>%
+##   setNames(c("Date", "Prec")) %>%
+##   mutate(Date = (Date - 719529) * 86400) %>%
+##   mutate(Date = as.POSIXct(Date, tz = "UTC", origin = "1970-01-01")) %>%
+##   mutate(Date = round_date(Date, unit = "0.25 seconds")) %>%
+##   mutate(Date = force_tz(Date, "Etc/GMT-5"))
 
 ## Event_Date = NewEvent_Date
 ## Event_mm = NewEvent_mm
-stop()
 
 NewEvent_Date = x$Date; NewEvent_mm = x$Prec
 
