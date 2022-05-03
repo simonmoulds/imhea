@@ -63,7 +63,7 @@ aggregation_cs <- function(x,
   is_wholenumber <- function(x, tol = .Machine$double.eps^0.5)  {
     abs(x - round(x)) < tol
   }
-  if (!is_wholenumber(scale)) {
+  if (!is_wholenumber(as.numeric(scale))) {
     stop("Argument `scale` should be an integer representing seconds.")
   }
 
@@ -80,7 +80,7 @@ aggregation_cs <- function(x,
   ##     % Run data gap assessment.
   ##     [Voids] = iMHEA_Voids(Event_Date,Event_mm,1);
   ## end
-  Voids = identify_voids(Event_Date, Event_mm)
+  Voids = identify_voids(tibble(Date = Event_Date, Event = Event_mm))
 
   ## %% TRANFORM DATES TO NUMBERS FOR EASIER PROCESSING - TODO check if necessary
   ## % Modified variables to process.
@@ -100,9 +100,9 @@ aggregation_cs <- function(x,
   ## MaxT = 60 * (1 / nd) * bucket / Minint;
   ## ## % Minimum tip interval to merge events.
   ## MinT = 60 * (1 / nd) * bucket / Maxint;
-  MaxT = 60 * 60 * (bucket / Minint)
+  MaxT = set_units(bucket / Minint, "s")
   ## % Minimum tip interval to merge events.
-  MinT = 60 * 60 * (bucket / Maxint)
+  MinT = set_units(bucket / Maxint, "s")
   ## % Aggregate events to avoid large intensities
   if (mintip) {
     ## Aggregate data at 1-min scale.
@@ -131,7 +131,7 @@ aggregation_cs <- function(x,
 
   ## FOR TESTING:
   x <-
-    read_csv("~/dev/imhea/matlab_divide_events_output.csv", col_names = FALSE) %>%
+    read_csv("~/dev/imhea/matlab_divide_events_output.csv", col_names = FALSE, show_col_types = FALSE) %>%
     setNames(c("Date", "Prec")) %>%
     mutate(Date = (Date - 719529) * 86400) %>%
     mutate(Date = as.POSIXct(Date, tz = "UTC", origin = "1970-01-01")) %>%
@@ -201,15 +201,23 @@ aggregation_cs <- function(x,
         x = round(x) # TODO check - would floor/ceiling be better?
 
         ## Aggregating data at 1-min interval starting at :00
-        DI = max(DI, floor_date(NewEvent_Date[indx[i]] - x0, unit = "minute"))
-        DF = ceiling_date(NewEvent_Date[indx[i] + n[i]] + xf)
-        x1m = seq(DI, DF, by = "1 min") - NewEvent_Date[indx[i]] + x0 # Equally spaced time interval
+        DI = max(DI, floor_date(NewEvent_Date[indx[i]] - seconds(x0), unit = "minute"))
+        DF = ceiling_date(NewEvent_Date[indx[i] + n[i]] + seconds(xf))
+        x1m = seq(DI, DF, by = "1 min") - NewEvent_Date[indx[i]] + as.numeric(x0)
+        x1m = round(x1m)
+        ## DI = max(DI,floor((NewEvent_Date(indx(i))-x0/86400)*nd)); % Initial date in [min]
+        ## DF = ceil((NewEvent_Date(indx(i)+n(i))+xf/86400)*nd); % Final date  in [min]
+        ## x1m = (DI:DF)' - NewEvent_Date(indx(i))*nd+x0/60; % Equally spaced time interval.
+        ## x1m = round(60*x1m); % Convert to seconds
       } else {
         ## Aggregating data at 1-min interval starting at :00
-        DI = max(DI, floor_date(NewEvent_Date[indx[i]] + seconds(0.5)))
+        DI = max(DI, floor_date(NewEvent_Date[indx[i]] + seconds(0.5), unit = "minute"))
         DF = ceiling_date(NewEvent_Date[indx[i] + n[i]])
-        x1m = seq(DI, DF, by = "1 min") - NewEvent_Date[indx[i]]
+        x1m = seq(DI, DF, by = "1 min") - NewEvent_Date[indx[i]] # TODO check units in seconds
+        x1m = round(x1m)
+        ## x1m = round(60*x1m); % Convert to seconds
       }
+      stop()
       ## % CS fitted to the current event and interpolated at 1-sec.
       ## % pp = spline(x,y); % yy = spline(x,y,xx);
       ## ## Experimenting with pracma::cubicspline
@@ -469,6 +477,7 @@ aggregation_cs <- function(x,
   ## fprintf('Rainfall volume after aggregation: %8.2f mm.\n',nansum(NewP))
   ## fprintf('\n')
 }
+
 
 
 aggregate_events <- function(Event_Date, Event_mm) {
