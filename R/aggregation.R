@@ -3,7 +3,7 @@
 #' Aggregate rainfall data with cubic spline interpolation.
 #'
 #' @param x rain_gauge.
-#' @param scale units. Aggregation interval in seconds [original - minutes]
+#' @param timescale units. Aggregation interval in seconds [original - minutes]
 #' @param bucket units. Rain gauge bucket volume in mm.
 #' @param mintip logical. Whether to aggregate at 1-min intervals
 #'   prior to interpolation.
@@ -13,7 +13,7 @@
 #'
 #' @return tsibble
 aggregation_cs <- function(x,
-                           scale = set_units(60, "s"),
+                           timescale = set_units(60, "s"),
                            bucket = set_units(0.2, "mm"),
                            mintip = TRUE,
                            halves = TRUE,
@@ -63,8 +63,8 @@ aggregation_cs <- function(x,
   is_wholenumber <- function(x, tol = .Machine$double.eps^0.5)  {
     abs(x - round(x)) < tol
   }
-  if (!is_wholenumber(as.numeric(scale))) {
-    stop("Argument `scale` should be an integer representing seconds.")
+  if (!is_wholenumber(as.numeric(timescale))) {
+    stop("Argument `timescale` should be an integer representing seconds.")
   }
 
   ## %% IDENTIFY DATA GAPS
@@ -122,7 +122,7 @@ aggregation_cs <- function(x,
   ##     [NewEvent_Date,NewEvent_mm] = MergeEvents(NewEvent_Date,NewEvent_mm,MinT);
   ## end
   ## % Adding a supporting initial extreme to avoid crashing the code later.
-  NewEvent_Date = c(Event_Date[1] - seconds(MaxT), NewEvent_Date)
+  NewEvent_Date = c(Event_Date[1] - MaxT, jNewEvent_Date)
   NewEvent_mm = c(0, NewEvent_mm)
   ## NewEvent_Date = cat(1,Event_Date(1)-MaxT,NewEvent_Date);
   ## NewEvent_mm = cat(1,0,NewEvent_mm);
@@ -173,6 +173,10 @@ aggregation_cs <- function(x,
   biased = rep(0, length(n))                 # Initialise bias vector
   bEvent = rep(0, length(n))                 # Initialise biased events counter
 
+  ## CONSTANTS
+  zero_mm <- set_units(0, "mm")
+  zero_secs <- set_units(0, "secs")
+
   sprintf("Interpolating data...")
   pb = txtProgressBar(min = 0, max = length(n), initial = 0)
   for (i in 1:length(n)) {
@@ -195,29 +199,33 @@ aggregation_cs <- function(x,
         ## Allocate only 1-half tip at the start and end of event
         x = x + x0
         y = y - bucket / 2
-        ## FIXME make constants zero_mm <- set_units(0, "mm"); zero_secs <- set_units(0, "s")
-        y = c(set_units(0, "mm"), y, rev(y)[1] + bucket / 2)
-        x = c(set_units(0, "s"), x, rev(x)[1] + xf)
+        y = c(zero_mm, y, rev(y)[1] + bucket / 2)
+        x = c(zero_secs, x, rev(x)[1] + xf)
         x = round(x) # TODO check - would floor/ceiling be better?
-
         ## Aggregating data at 1-min interval starting at :00
-        DI = max(DI, floor_date(NewEvent_Date[indx[i]] - seconds(x0), unit = "minute"))
-        DF = ceiling_date(NewEvent_Date[indx[i] + n[i]] + seconds(xf))
-        x1m = seq(DI, DF, by = "1 min") - NewEvent_Date[indx[i]] + as.numeric(x0)
-        x1m = round(x1m)
-        ## DI = max(DI,floor((NewEvent_Date(indx(i))-x0/86400)*nd)); % Initial date in [min]
-        ## DF = ceil((NewEvent_Date(indx(i)+n(i))+xf/86400)*nd); % Final date  in [min]
-        ## x1m = (DI:DF)' - NewEvent_Date(indx(i))*nd+x0/60; % Equally spaced time interval.
-        ## x1m = round(60*x1m); % Convert to seconds
+        DI = max(
+          DI,
+          floor_date(NewEvent_Date[indx[i]] - seconds(x0), unit = "minute")
+        )
+        DF = ceiling_date(
+          NewEvent_Date[indx[i] + n[i]] + seconds(xf),
+          unit = "minute"
+        )
+        x1m <- seq(DI, DF, by = "1 min") - NewEvent_Date[indx[i]]
+        ## Convert from difftime to seconds, and add offset
+        x1m <- seconds(x1m) + seconds(x0)
+        x1m = set_units(as.numeric(round(x1m)), "secs")
       } else {
         ## Aggregating data at 1-min interval starting at :00
-        DI = max(DI, floor_date(NewEvent_Date[indx[i]] + seconds(0.5), unit = "minute"))
+        DI = max(
+          DI,
+          floor_date(NewEvent_Date[indx[i]] + seconds(0.5), unit = "minute")
+        )
         DF = ceiling_date(NewEvent_Date[indx[i] + n[i]])
-        x1m = seq(DI, DF, by = "1 min") - NewEvent_Date[indx[i]] # TODO check units in seconds
-        x1m = round(x1m)
-        ## x1m = round(60*x1m); % Convert to seconds
+        x1m = seq(DI, DF, by = "1 min") - NewEvent_Date[indx[i]]
+        x1m <- seconds(x1m)
+        x1m = set_units(as.numeric(round(x1m)), "secs")
       }
-      stop()
       ## % CS fitted to the current event and interpolated at 1-sec.
       ## % pp = spline(x,y); % yy = spline(x,y,xx);
       ## ## Experimenting with pracma::cubicspline
@@ -260,14 +268,17 @@ aggregation_cs <- function(x,
       ## ## monotonic spline prevents this:
       ## y1m = spline(c(x[1] - 60, x, rev(x)[1] + 60), c(y[1], y, rev(y)[1]), method = 'hyman', xout = x1m)
       if (halves) {
-        ## % Zero rainfall rates at borders.
-        y1m[1] = 0
-        y1m[length(y1m)] = y1m[length(y1m) - 1]
+        ## Zero rainfall rates at borders.
+        y1m[1] <- 0
+        y1m[length(y1m)] <- y1m[length(y1m) - 1]
       }
+      ## ## Check
+      ## plot(x, y)
+      ## lines(x1m, y1m)
       ## r1m = [y1m(1);diff(y1m)]; % Rainfall rate at each x1m [mm min^{-1}]
-      stop()
       ## FIXME consider units!!!
       ## FIXME return rate
+      stop()
       r1m = compute_rainfall_intensity(y1m) # Rainfall rate at each x1m [mm min^{-1}]
       ## % Correction for negative intensities and biased volumes.
       r2m = r1m
@@ -420,19 +431,19 @@ aggregation_cs <- function(x,
   NewDate = seq(
     NewDate_1min[1],
     rev(NewDate_1min)[1],
-    by = paste0(scale, " min")
+    by = paste0(drop_units(set_units(timescale, "min")), " min")
   )
   ## NewDate = (NewDate_1min(1):scale:NewDate_1min(end))';
   if (halves) {
     ## Rainfall rate at scale interval obtained from fitted cumulative rainfall
-    NewP = c(bucket / 2, CumP_1min[seq(scale + 1, length(CumP_1min), by = scale)] - CumP_1min[seq(1, length(CumP_1min) - scale, scale)])
+    NewP = c(bucket / 2, CumP_1min[seq(timescale + 1, length(CumP_1min), by = timescale)] - CumP_1min[seq(1, length(CumP_1min) - timescale, timescale)])
     ## % Aggregate single tip counting at scale interval.
-    Single = c(bucket / 2, Single_1min[seq(scale + 1, length(Single_1min), by = scale)] - Single_1min[seq(1, length(Single_1min) - scale, scale)])
+    Single = c(bucket / 2, Single_1min[seq(timescale + 1, length(Single_1min), by = scale)] - Single_1min[seq(1, length(Single_1min) - timescale, timescale)])
   } else {
     ## Rainfall rate at scale interval obtained from fitted cumulative rainfall
-    NewP = c(0, CumP_1min[seq(scale + 1, length(CumP_1min), by = scale)] - CumP_1min[seq(1, length(CumP_1min) - scale, scale)])
+    NewP = c(0, CumP_1min[seq(timescale + 1, length(CumP_1min), by = timescale)] - CumP_1min[seq(1, length(CumP_1min) - timescale, timescale)])
     ## % Aggregate single tip counting at scale interval.
-    Single = c(0, Single_1min[seq(scale + 1, length(Single_1min), by = scale)] - Single_1min[seq(1, length(Single_1min) - scale, scale)])
+    Single = c(0, Single_1min[seq(timescale + 1, length(Single_1min), by = timescale)] - Single_1min[seq(1, length(Single_1min) - timescale, timescale)])
   }
   ## if halves ~= false || halves ~= 0
   ##     % Rainfall rate at scale interval obtained from fitted cumulative rainfall.
@@ -452,9 +463,9 @@ aggregation_cs <- function(x,
   Single[round(Single,8) == 0] = 0
   ## % Cut the vectors to the actual initial and final date.
   ## nd = 1440 / scale # % Number of intervals per day
-  DI = ceiling_date(min(Event_Date), unit = paste0(scale, " minutes"))
+  DI = ceiling_date(min(Event_Date), unit = paste0(timescale, " minutes"))
   ## DI = ceiling_date(min(Event_Date) * nd) # % Initial date in [min]
-  DF = ceiling_date(max(Event_Date), unit = paste0(scale, " minutes")) # % Final date in [min]
+  DF = ceiling_date(max(Event_Date), unit = paste0(timescale, " minutes")) # % Final date in [min]
   CumP[NewDate < DI | NewDate > DF] = NA
   NewP[NewDate < DI | NewDate > DF] = NA
   Single[NewDate < DI | NewDate > DF] = NA

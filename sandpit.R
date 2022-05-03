@@ -150,9 +150,8 @@ x <- p1
 scale <- set_units(60, "s")
 bucket <- set_units(0.2, "mm")
 stop()
+
 ## Now, go to aggregation_cs
-
-
 
 Event_Date <- x[["Date"]]
 Event_mm <- x[["Event"]]
