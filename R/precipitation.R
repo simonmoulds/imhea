@@ -113,28 +113,42 @@ compute_rainfall_intensity <- function(y1m) {
 }
 
 correct_negative_rate <- function(y, x1m, r1m, Lowint) {
-  ## FIXME
   iter = 0
   zero_mmh <- set_units(0, mm/h)
-  tot0 <- max(y)
-  tot1 <- sum(r1m * set_units(1, minute))
-  while (iter <= 10 & (abs(tot0 - tot1) > Lowint | any(round(r1m[r1m != zero_mmh], digits = 8) < Lowint))) {
+  one_minute <- set_units(1, minute)
+  mycond <- function(y, r1m, iter, ...) {
+    tot0 <- max(y)
+    tot1 <- sum(r1m * one_minute)
+    cond1 <- iter <= 10
+    cond2 <- abs((tot0 - tot1) * set_units(1, "1/h")) > Lowint
+    cond3 <- any(round(r1m[r1m != zero_mmh], digits = 8) < Lowint)
+    cond1 & (cond2 | cond3)
+  }
+  myfun <- function(r1m) {
+    sum(r1m * set_units(1, minute))
+  }
+  while (mycond(y, r1m, iter)) {
     iter = iter + 1
-    r1m[r1m < 0] = 0 # Set negative rainfall rates to zero
-    r1m[r1m > 0 & r1m < Lowint] = Lowint # Replace the lowest rates
-    r1m[r1m >= Lowint] = r1m[r1m >= Lowint] * (rev(y)[1] - sum(r1m[r1m < Lowint])) / (sum(r1m) - sum(r1m[r1m < Lowint])) # Correction of biased rainfall
+    r1m[r1m < zero_mmh] = zero_mmh # Set negative rainfall rates to zero
+    r1m[r1m > zero_mmh & r1m < Lowint] = Lowint # Replace the lowest rates
+    correction_factor <- (
+      (max(y) - sum(r1m[r1m < Lowint] * one_minute))
+      / (sum(r1m * one_minute) - sum(r1m[r1m < Lowint] * one_minute))
+    )
+    ## Correction of biased rainfall
+    r1m[r1m >= Lowint] = r1m[r1m >= Lowint] * correction_factor
   }
   r1m
 }
 
 compute_cumulative_rainfall_curve <- function(y, r1m, halves) {
   ## Calculate the cumulative rainfall curve
-  y2m = cumsum(r1m)
+  y2m = cumsum(r1m * set_units(1, minute))
   ## Correct slight differences in totals
-  y2m[length(y2m)] = rev(y)[1]
+  y2m[length(y2m)] = max(y)
   if (halves) {
     ## Zero rainfall rates at borders
-    y2m[length(y2m) - 1] = rev(y)[1]
+    y2m[length(y2m) - 1] = max(y)
   }
   y2m
   ## ## Recalculate the intensities

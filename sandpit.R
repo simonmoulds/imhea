@@ -147,8 +147,9 @@ int_HRes <- median(int_length(int_diff(q1[[index(q1)]])))
 ## Test some of the functions called within aggregation_cs(...)
 ## Setup [from aggregation_cs(...)]
 x <- p1
-scale <- set_units(60, "s")
+timescale <- set_units(60, "s")
 bucket <- set_units(0.2, "mm")
+
 stop()
 
 ## Now, go to aggregation_cs

@@ -91,7 +91,7 @@ aggregation_cs <- function(x,
   NewEvent_mm = NewEvent_mm[!is.na(NewEvent_mm)]
 
   ## %% PREPROCESS RAINFALL EVENTS
-  nd = 1440; # % Number of minutes per day or numeric value of 1 minute: 1/1440
+  ## nd = 1440; # % Number of minutes per day or numeric value of 1 minute: 1/1440
   ## Maximum tip interval to separate events.
   ## N.B.
   ## * [bucket / Minint] gives the minimum time between tips in hours
@@ -122,7 +122,7 @@ aggregation_cs <- function(x,
   ##     [NewEvent_Date,NewEvent_mm] = MergeEvents(NewEvent_Date,NewEvent_mm,MinT);
   ## end
   ## % Adding a supporting initial extreme to avoid crashing the code later.
-  NewEvent_Date = c(Event_Date[1] - MaxT, jNewEvent_Date)
+  NewEvent_Date = c(Event_Date[1] - seconds(MaxT), NewEvent_Date)
   NewEvent_mm = c(0, NewEvent_mm)
   ## NewEvent_Date = cat(1,Event_Date(1)-MaxT,NewEvent_Date);
   ## NewEvent_mm = cat(1,0,NewEvent_mm);
@@ -272,9 +272,9 @@ aggregation_cs <- function(x,
         y1m[1] <- 0
         y1m[length(y1m)] <- y1m[length(y1m) - 1]
       }
-      ## ## Check
-      ## plot(x, y)
-      ## lines(x1m, y1m)
+      ## Check
+      plot(x, y)
+      lines(x1m, y1m)
       ## r1m = [y1m(1);diff(y1m)]; % Rainfall rate at each x1m [mm min^{-1}]
       r1m = compute_rainfall_intensity(y1m) # Rainfall rate at each x1m [mm min^{-1}]
       ## % Correction for negative intensities and biased volumes.
@@ -287,12 +287,9 @@ aggregation_cs <- function(x,
         r2m = compute_rainfall_intensity(y2m)
         bias = compute_bias(y, x1m, r2m)
       }
-      stop()
-      ## FIXME
-      r2m = correct_negative_rate(y, r2m, Lowint)
+      r2m = correct_negative_rate(y, x1m, r2m, Lowint)
       y2m = compute_cumulative_rainfall_curve(y, r2m, halves)
       r2m = compute_rainfall_intensity(y2m)
-      ## [r2m,y2m,biased(i),bEvent(i)] = intCorrection(r1m,y,Lowint,halves,x,x1m);
       ## Assemble cumulative rainfall curve
       ix = NewDate_1min >= DI & NewDate_1min <= DF
       CumP_1min[ix] = CumP_1min[ix] + y2m
@@ -378,19 +375,23 @@ aggregation_cs <- function(x,
       ## Meanint has units mm/h
       ## x0 is event duration in minutes
       ## xf is end of event in minutes
-      x0 = NewEvent_mm[indx[i]] / Meanint * 60 - 1    # Time interval in [min]
-      xf = NewEvent_Date[indx[i]]                     # Final date in [min]
+      x0 = set_units(NewEvent_mm[indx[i]], mm) / Meanint
+      xf = NewEvent_Date[indx[i]]
       ## Equally spaced divided tip [FIXME - equivalent to MATLAB?]
-      ## FIXME - equivalent to MATLAB?
       ## x = (xf - x0 * nd / 1440:xf)
-      x = seq(xf - minutes(x0), xf, by = "1 min")
-      DI = floor_date(xf - minutes(x0), unit = "minute") # Initial date in [min]
+      x = seq(xf - minutes(set_units(x0, minute)), xf, by = "1 min")
+      ## Initial date
+      DI = floor_date(xf - minutes(set_units(x0, minute)), unit = "minute")
+      ## Final date
       DF = ceiling_date(xf, unit = "minute")  # Final date in [min]
-      x1m = seq(DI, DF, by = "1 min")  # Equally spaced time interval
-      ## x1m = (DI:DF)                                # Equally spaced time interval
-      y = NewEvent_mm[indx[i]] * rep(1, length(x)) / (x0 + 1)
+      ## Equally spaced time interval
+      x1m = seq(DI, DF, by = "1 min")
+      y <- (
+        NewEvent_mm[indx[i]]
+        / rep(1 / (drop_units(set_units(x0, minute)) + 1), length(x))
+      ) %>% set_units(mm) # FIXME make sure this is consistent
       ## Tip counting
-      r1m = rep(0, length(x1m))
+      r1m = set_units(rep(0, length(x1m)), mm/minute)
       if (x[1] == x1m[1]) {
         j = 2 # Data counter
         r1m[1] = y[1]
@@ -404,6 +405,7 @@ aggregation_cs <- function(x,
           j = j + 1
         }
       }
+      stop()
       y1m = cumsum(r1m) # Cumulative rainfall at each x1m
       ## Assemble cumulative rainfall curve
       indx = NewDate_1min >= DI & NewDate_1min <= DF
@@ -485,6 +487,7 @@ aggregation_cs <- function(x,
   ## fprintf('Rainfall volume after aggregation: %8.2f mm.\n',nansum(NewP))
   ## fprintf('\n')
 }
+
 
 
 
