@@ -276,22 +276,19 @@ aggregation_cs <- function(x,
       ## plot(x, y)
       ## lines(x1m, y1m)
       ## r1m = [y1m(1);diff(y1m)]; % Rainfall rate at each x1m [mm min^{-1}]
-      ## FIXME consider units!!!
-      ## FIXME return rate
-      stop()
       r1m = compute_rainfall_intensity(y1m) # Rainfall rate at each x1m [mm min^{-1}]
       ## % Correction for negative intensities and biased volumes.
       r2m = r1m
       bEvent = 0
-      ## FIXME y should have units
-      bias = compute_bias(y, r1m)
+      bias = compute_bias(y, x1m, r1m)
       bEvent = bias > 0.25
       if (bEvent) {
         y2m = correct_bias(x, y, x1m, r1m)
         r2m = compute_rainfall_intensity(y2m)
-        bias = compute_bias(y, r2m)
+        bias = compute_bias(y, x1m, r2m)
       }
-      ## FIXME y should have units
+      stop()
+      ## FIXME
       r2m = correct_negative_rate(y, r2m, Lowint)
       y2m = compute_cumulative_rainfall_curve(y, r2m, halves)
       r2m = compute_rainfall_intensity(y2m)

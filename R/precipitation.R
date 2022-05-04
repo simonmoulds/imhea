@@ -80,28 +80,45 @@ rain_gauge_network <- function(...,
 
 
 
-compute_bias <- function(y, r1m) {
-  abs(rev(y)[1] - sum(r1m[r1m > 0])) / rev(y)[1]
+compute_bias <- function(y, x1m, r1m) {
+  ## y is cumulative rainfall, so rev(y)[1] is the total rainfall during the event
+  ## r1m <- set_units(r1m, mm/minute)
+  tot0 <- max(y)
+  zero_ix <- r1m > set_units(0, mm/h)
+  tot1 <- sum(r1m[zero_ix] * set_units(1, minute))
+  bias <- (abs(tot0 - tot1) / tot0) %>% drop_units()
+  bias
 }
 
 correct_bias <- function(x, y, x1m, r1m) {
   ## Use linear interpolation instead
-  y2m = approx(x, y, x1m, rule=1)
+  y2m <- approx(x, y, x1m, rule=1)$y
+  y2m <- y2m %>% set_units(mm)
   if (halves) {
     ## Zero rainfall rates at borders
-    y2m[1] = 0
+    y2m[1] = zero_mm
     y2m[length(y2m)] = rev(y2m)[2]
   }
   y2m
 }
 
+## compute_rainfall_intensity <- function(y1m) {
+##   int <- set_units(c(y1m[1], diff(y1m)), "mm/h") # FIXME check this is correct
+## }
 compute_rainfall_intensity <- function(y1m) {
-  int <- set_units(c(y1m[1], diff(y1m)), "mm/h") # FIXME check this is correct
+  ## y1m is cumulative rainfall at minute intervals
+  r1m <- c(y1m[1], diff(y1m)) / set_units(1, "minute")
+  r1m <- set_units(r1m, "mm/h")
+  r1m
 }
 
-correct_negative_rate <- function(y, r1m, Lowint) {
+correct_negative_rate <- function(y, x1m, r1m, Lowint) {
+  ## FIXME
   iter = 0
-  while (iter <= 10 & (abs(rev(y)[1] - sum(r1m)) > Lowint | any(round(r1m[r1m != 0], digits = 8) < Lowint))) {
+  zero_mmh <- set_units(0, mm/h)
+  tot0 <- max(y)
+  tot1 <- sum(r1m * set_units(1, minute))
+  while (iter <= 10 & (abs(tot0 - tot1) > Lowint | any(round(r1m[r1m != zero_mmh], digits = 8) < Lowint))) {
     iter = iter + 1
     r1m[r1m < 0] = 0 # Set negative rainfall rates to zero
     r1m[r1m > 0 & r1m < Lowint] = Lowint # Replace the lowest rates
