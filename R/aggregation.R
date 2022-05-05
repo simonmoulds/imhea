@@ -128,7 +128,6 @@ aggregation_cs <- function(x,
   ## NewEvent_mm = cat(1,0,NewEvent_mm);
   ## % Redistribute rainfall tips occurring at relatively long periods.
   x = divide_events(NewEvent_Date, NewEvent_mm, MaxT)
-
   ## FOR TESTING:
   x <-
     read_csv("~/dev/imhea/matlab_divide_events_output.csv", col_names = FALSE, show_col_types = FALSE) %>%
@@ -159,25 +158,25 @@ aggregation_cs <- function(x,
   D = c(D, D_last)
   D = as.numeric(D, units = "mins")
   n1 = indx[n < 1] # Index of events with only 1 point
-  sprintf("Number of rainfall events identified: %6i", length(indx))
-  sprintf("Average duration of the events: %8.2f min", mean(D[D > 0]))
-  sprintf("Rainfall events consisting of 1 tip only: %6i", length(n1))
+  cat(sprintf("Number of rainfall events identified: %6i", length(indx)), "\n")
+  cat(sprintf("Average duration of the events: %8.2f min", mean(D[D > 0])), "\n")
+  cat(sprintf("Rainfall events consisting of 1 tip only: %6i", length(n1)), "\n")
 
   ## FIT EVENTS AND AGGREGATING AT 1-min INTERVAL
   ## Build a 1 minute cumulative rainfall curve
   DI = floor_date(min(Event_Date), unit = "minute")
   DF = ceiling_date(max(Event_Date), unit = "minute")
   NewDate_1min = seq(DI, DF, by = "1 min")
-  CumP_1min = rep(0, length(NewDate_1min))   # Initialise accumulation
-  Single_1min = rep(0, length(NewDate_1min)) # Initialise single tip counting
-  biased = rep(0, length(n))                 # Initialise bias vector
-  bEvent = rep(0, length(n))                 # Initialise biased events counter
+  CumP_1min = set_units(rep(0, length(NewDate_1min)), mm)   # Initialise accumulation
+  Single_1min = set_units(rep(0, length(NewDate_1min)), mm) # Initialise single tip counting
+  biased = rep(0, length(n))                              # Initialise bias vector
+  bEvent = rep(0, length(n))                              # Initialise biased events counter
 
   ## CONSTANTS
   zero_mm <- set_units(0, "mm")
   zero_secs <- set_units(0, "secs")
 
-  sprintf("Interpolating data...")
+  cat(sprintf("Interpolating data..."), "\n")
   pb = txtProgressBar(min = 0, max = length(n), initial = 0)
   for (i in 1:length(n)) {
     ## Procedure:
@@ -405,8 +404,7 @@ aggregation_cs <- function(x,
           j = j + 1
         }
       }
-      stop()
-      y1m = cumsum(r1m) # Cumulative rainfall at each x1m
+      y1m = cumsum(r1m * set_units(1, minute))
       ## Assemble cumulative rainfall curve
       indx = NewDate_1min >= DI & NewDate_1min <= DF
       CumP_1min[indx] = CumP_1min[indx] + y1m
@@ -418,6 +416,7 @@ aggregation_cs <- function(x,
     setTxtProgressBar(pb, i)
   }
   close(pb)
+  stop()
   ## fprintf('Maximum bias corrected in event interpolation: %5.2f%%.\n',100*nanmax(biased))
   ## fprintf('%2i event(s) with bias >25%% interpolated linearly.\n',nansum(bEvent))
   ## fprintf('\n')
@@ -491,6 +490,7 @@ aggregation_cs <- function(x,
 
 
 
+
 aggregate_events <- function(Event_Date, Event_mm) {
   ## Agregate rainfall at 1-min intervals.% Agregate rainfall at 1-min intervals.
   k = length(Event_mm)
@@ -529,6 +529,7 @@ aggregate_events <- function(Event_Date, Event_mm) {
   message(sprintf("Rainfall volume after aggregation: %8.2f mm", sum(NewP_1min, na.rm = TRUE)))
   tibble(Date = NewDate_1min, Prec = NewP_1min)
 }
+
 
 
 merge_events <- function(Event_Date, Event_mm, MinT) {
