@@ -173,9 +173,9 @@ aggregation_cs <- function(x,
   bEvent = rep(0, length(n))                              # Initialise biased events counter
 
   ## CONSTANTS
-  zero_mm <- set_units(0, "mm")
-  zero_secs <- set_units(0, "secs")
-
+  zero_mm <- set_units(0, mm)
+  zero_secs <- set_units(0, secs)
+  one_minute <- set_units(1, minute)
   cat(sprintf("Interpolating data..."), "\n")
   pb = txtProgressBar(min = 0, max = length(n), initial = 0)
   for (i in 1:length(n)) {
@@ -223,7 +223,7 @@ aggregation_cs <- function(x,
         DF = ceiling_date(NewEvent_Date[indx[i] + n[i]])
         x1m = seq(DI, DF, by = "1 min") - NewEvent_Date[indx[i]]
         x1m <- seconds(x1m)
-        x1m = set_units(as.numeric(round(x1m)), "secs")
+        x1m <- set_units(as.numeric(round(x1m)), "secs")
       }
       ## % CS fitted to the current event and interpolated at 1-sec.
       ## % pp = spline(x,y); % yy = spline(x,y,xx);
@@ -272,8 +272,8 @@ aggregation_cs <- function(x,
         y1m[length(y1m)] <- y1m[length(y1m) - 1]
       }
       ## Check
-      plot(x, y)
-      lines(x1m, y1m)
+      ## plot(x, y)
+      ## lines(x1m, y1m)
       ## r1m = [y1m(1);diff(y1m)]; % Rainfall rate at each x1m [mm min^{-1}]
       r1m = compute_rainfall_intensity(y1m) # Rainfall rate at each x1m [mm min^{-1}]
       ## % Correction for negative intensities and biased volumes.
@@ -289,7 +289,8 @@ aggregation_cs <- function(x,
       r2m = correct_negative_rate(y, x1m, r2m, Lowint)
       y2m = compute_cumulative_rainfall_curve(y, r2m, halves)
       r2m = compute_rainfall_intensity(y2m)
-      ## Assemble cumulative rainfall curve
+
+      # Assemble cumulative rainfall curve
       ix = NewDate_1min >= DI & NewDate_1min <= DF
       CumP_1min[ix] = CumP_1min[ix] + y2m
       CumP_1min[NewDate_1min > DF] = CumP_1min[NewDate_1min == DF]
@@ -393,77 +394,68 @@ aggregation_cs <- function(x,
       r1m = set_units(rep(0, length(x1m)), mm/minute)
       if (x[1] == x1m[1]) {
         j = 2 # Data counter
-        r1m[1] = y[1]
+        r1m[1] = y[1] * set_units(1, 1/minute)
       } else {
         j = 1 # Data counter
       }
       for (itb in 2:length(x1m)) {
         ## Aggregate values
         while (j <= length(y) & x[j] > x1m[itb-1] & x[j] <= x1m[itb]) {
-          r1m[itb] = r1m[itb] + y[j]
+          r1m[itb] = r1m[itb] + y[j] * set_units(1, 1/minute)
           j = j + 1
         }
       }
       y1m = cumsum(r1m * set_units(1, minute))
       ## Assemble cumulative rainfall curve
-      indx = NewDate_1min >= DI & NewDate_1min <= DF
-      CumP_1min[indx] = CumP_1min[indx] + y1m
+      ix = NewDate_1min >= DI & NewDate_1min <= DF
+      CumP_1min[ix] = CumP_1min[ix] + y1m
       CumP_1min[NewDate_1min > DF] = CumP_1min[NewDate_1min == DF]
       ## Assemble single tip rainfall vector
-      Single_1min[indx] = Single_1min[indx] + y1m
+      Single_1min[ix] = Single_1min[ix] + y1m
       Single_1min[NewDate_1min > DF] = Single_1min[NewDate_1min == DF]
     }
     setTxtProgressBar(pb, i)
   }
   close(pb)
-  stop()
+  ## FIXME [logging]
   ## fprintf('Maximum bias corrected in event interpolation: %5.2f%%.\n',100*nanmax(biased))
   ## fprintf('%2i event(s) with bias >25%% interpolated linearly.\n',nansum(bEvent))
   ## fprintf('\n')
   ## % drawnow
   ## % delete(findall(0,'Type','figure'))
 
-  ## %% PREPARE THE DATA VECTORS AT THE SPECIFIED SCALE
-
-  ## % Equally spaced time interval
+  ## Equally spaced time interval
   NewDate = seq(
     NewDate_1min[1],
     rev(NewDate_1min)[1],
     by = paste0(drop_units(set_units(timescale, "min")), " min")
   )
-  ## NewDate = (NewDate_1min(1):scale:NewDate_1min(end))';
+  nt <- length(NewDate)
   if (halves) {
     ## Rainfall rate at scale interval obtained from fitted cumulative rainfall
-    NewP = c(bucket / 2, CumP_1min[seq(timescale + 1, length(CumP_1min), by = timescale)] - CumP_1min[seq(1, length(CumP_1min) - timescale, timescale)])
-    ## % Aggregate single tip counting at scale interval.
-    Single = c(bucket / 2, Single_1min[seq(timescale + 1, length(Single_1min), by = scale)] - Single_1min[seq(1, length(Single_1min) - timescale, timescale)])
+    NewP <- c(bucket / 2, (CumP_1min[2:nt] - CumP_1min[1:(nt - 1)]))
+    Single <- c(bucket / 2, (Single_1min[2:nt] - Single_1min[1:(nt - 1)]))
   } else {
     ## Rainfall rate at scale interval obtained from fitted cumulative rainfall
-    NewP = c(0, CumP_1min[seq(timescale + 1, length(CumP_1min), by = timescale)] - CumP_1min[seq(1, length(CumP_1min) - timescale, timescale)])
-    ## % Aggregate single tip counting at scale interval.
-    Single = c(0, Single_1min[seq(timescale + 1, length(Single_1min), by = timescale)] - Single_1min[seq(1, length(Single_1min) - timescale, timescale)])
+    NewP <- c(zero_mm, CumP_1min[2:nt] - CumP_1min[1:(nt - 1)])
+    Single <- c(zero_mm, (Single_1min[2:nt] - Single_1min[1:(nt - 1)]))
   }
-  ## if halves ~= false || halves ~= 0
-  ##     % Rainfall rate at scale interval obtained from fitted cumulative rainfall.
-  ##     NewP = [bucket/2;CumP_1min(scale+1:scale:end) - CumP_1min(1:scale:end-scale)];
-  ##     % Aggregate single tip counting at scale interval.
-  ##     Single = [bucket/2;Single_1min(scale+1:scale:end) - Single_1min(1:scale:end-scale)];
-  ## else
-  ##     % Rainfall rate at scale interval obtained from fitted cumulative rainfall.
-  ##     NewP = [0;CumP_1min(scale+1:scale:end) - CumP_1min(1:scale:end-scale)];
-  ##     % Aggregate single tip counting at scale interval.
-  ##     Single = [0;Single_1min(scale+1:scale:end) - Single_1min(1:scale:end-scale)];
-  ## end
-  ## % Cumulative rainfall at scale interval.
+  print(sum(NewP, na.rm=T))
+  ## Cumulative rainfall at scale interval.
   CumP = cumsum(NewP)
   ## % Correct numerical errors in the calculations of zero rain rates.
-  NewP[round(NewP, 8) == 0] = 0
-  Single[round(Single,8) == 0] = 0
-  ## % Cut the vectors to the actual initial and final date.
-  ## nd = 1440 / scale # % Number of intervals per day
-  DI = ceiling_date(min(Event_Date), unit = paste0(timescale, " minutes"))
+  NewP[round(NewP, 8) == zero_mm] <- 0
+  Single[round(Single,8) == zero_mm] <- 0
+  ## Cut the vectors to the actual initial and final date.
+  DI = ceiling_date(
+    min(Event_Date),
+    unit = paste0(drop_units(set_units(timescale, "min")), " min")
+  )
   ## DI = ceiling_date(min(Event_Date) * nd) # % Initial date in [min]
-  DF = ceiling_date(max(Event_Date), unit = paste0(timescale, " minutes")) # % Final date in [min]
+  DF = ceiling_date(
+    max(Event_Date),
+    unit = paste0(drop_units(set_units(timescale, "min")), " min")
+  ) # % Final date in [min]
   CumP[NewDate < DI | NewDate > DF] = NA
   NewP[NewDate < DI | NewDate > DF] = NA
   Single[NewDate < DI | NewDate > DF] = NA
@@ -479,17 +471,28 @@ aggregation_cs <- function(x,
     NewP[idx] = NA
     Single[idx] = NA
   }
+  print(sprintf('Rainfall volume before aggregation: %8.2f mm.\n', sum(Event_mm, na.rm = TRUE)))
+  print(sprintf('Rainfall volume after aggregation: %8.2f mm.\n', sum(NewP, na.rm = TRUE)))
+  sprintf('\n')
   ## TODO return something - data.frame? See what iMHEA_Workflow is expecting
-  data.frame(Date = NewDate, NewP=NewP, CumP=CumP, Single=Single)
-  ## Logging:
-  ## fprintf('Rainfall volume before aggregation: %8.2f mm.\n',nansum(Event_mm))
-  ## fprintf('Rainfall volume after aggregation: %8.2f mm.\n',nansum(NewP))
-  ## fprintf('\n')
+  tibble(Date = NewDate, NewP=NewP, CumP=CumP, Single=Single)
 }
 
-
-
-
+## x = c(1, 2, 9, 9, 2, 1, 1, 5, 5, 1)
+## x = c(1, 2, 9, NA, 2, 1, NA, 5, 5, 1)
+## localMin2 <- function(x) {
+##   finite_ix = which(!is.na(x))
+##   x = x[finite_ix]
+##   arms = diff(c(-.Machine$integer.max, -x)) > 0
+##   index.arms = cumsum(rle2(arms)$lengths)
+##   end.arms.true = index.arms[seq.int(from = 1, to = length(index.arms), by = 2)]
+##   if (x[1] == x[2]) {
+##       end.arms.true = end.arms.true[-1]
+##   }
+##   end.arms.true = finite_ix[end.arms.true]
+##   return(end.arms.true)
+## }
+## localMin2(x)
 
 aggregate_events <- function(Event_Date, Event_mm) {
   ## Agregate rainfall at 1-min intervals.% Agregate rainfall at 1-min intervals.
@@ -670,19 +673,3 @@ divide_events <- function(Event_Date, Event_mm, MaxT) {
   message(sprintf("Rainfall volume after spreading: %8.2f mm", sum(NewEvent_mm, na.rm = TRUE)))
   tibble(Date = NewEvent_Date, Prec = NewEvent_mm)
 }
-
-## x = c(1, 2, 9, 9, 2, 1, 1, 5, 5, 1)
-## x = c(1, 2, 9, NA, 2, 1, NA, 5, 5, 1)
-## localMin2 <- function(x) {
-##   finite_ix = which(!is.na(x))
-##   x = x[finite_ix]
-##   arms = diff(c(-.Machine$integer.max, -x)) > 0
-##   index.arms = cumsum(rle2(arms)$lengths)
-##   end.arms.true = index.arms[seq.int(from = 1, to = length(index.arms), by = 2)]
-##   if (x[1] == x[2]) {
-##       end.arms.true = end.arms.true[-1]
-##   }
-##   end.arms.true = finite_ix[end.arms.true]
-##   return(end.arms.true)
-## }
-## localMin2(x)
