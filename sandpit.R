@@ -147,127 +147,137 @@ int_HRes <- median(int_length(int_diff(q1[[index(q1)]])))
 ## Test some of the functions called within aggregation_cs(...)
 ## Setup [from aggregation_cs(...)]
 x <- p1
-timescale <- set_units(60, "s")
+timescale <- set_units(60 * 5, "s")
+## timescale <- set_units(60, "s")
 bucket <- set_units(0.2, "mm")
 mintip <- TRUE
 halves <- TRUE
-stop()
-load_all()
-x_aggr <- aggregation_cs(x) # Runs through, but wrong answer
-## TODO compare with output of MATLAB version
 
-## Now, go to aggregation_cs
+x_aggr <- aggregation_cs(x, timescale = timescale)
 
-Event_Date <- x[["Date"]]
-Event_mm <- x[["Event"]]
-Minint = set_units(0.2, "mm/h")
-Maxint = set_units(127, "mm/h")
-Meanint = set_units(3, "mm/h")
-Lowint = min(set_units(0.1, "mm/h"), Minint / 2) # FIXME [mm min^{-1}]
-
-Event_Date = Event_Date - seconds(0.25)
-## Test identify_voids(...) function
-Voids = identify_voids(p1) # FIXME - works, but is very slow
-## ## Event_Date = Event_Date # datenum(Event_Date)
-## NewEvent_Date = Event_Date
-## NewEvent_mm = Event_mm
-## NewEvent_mm[NewEvent_mm == 0] = NA
-## NewEvent_Date = NewEvent_Date[!is.na(NewEvent_mm)]
-## NewEvent_mm = NewEvent_mm[!is.na(NewEvent_mm)]
-
-## ## Test aggregate_events(...) and merge_events(...)
-## ## Maximum tip interval to separate events.
-## ## N.B.
-## ## * [bucket / Minint] gives the minimum time between tips in hours
-## ## * multiplying by [60 * (1 / nd)] converts to days
-## ## * we actually want the units in seconds, so instead of multiplying
-## ##   by [60 * (1 / nd)], we multiply by 3600
-## MaxT = set_units(bucket, "mm") / set_units(Minint, "mm/s")
-## ## Minimum tip interval to merge events.
-## MinT = set_units(bucket, "mm") / set_units(Maxint, "mm/s")
-## ## % Aggregate events to avoid large intensities
-## mintip = TRUE
-## ## if (mintip) {
-## ## Aggregate data at 1-min scale [WORKING]
-## x_aggr <- aggregate_events(NewEvent_Date, NewEvent_mm)
-## ## } else {
-## ## Merge rainfall tips occurring at extremely short periods [WORKING, but not tested properly with this dataset]
-## ## x_aggr = merge_events(NewEvent_Date, NewEvent_mm, MinT)
-
-## ## TODO work with dataframes throughout
-## NewEvent_Date = x_aggr$Date; NewEvent_mm = x_aggr$Prec
-## ## if mintip == true
-## ##     % Aggregate data at 1-min scale.
-## ##     [NewEvent_Date,NewEvent_mm] = AggregateEvents(NewEvent_Date,NewEvent_mm);
-## ## else
-## ##     % Merge rainfall tips occurring at extremely short periods.
-## ##     [NewEvent_Date,NewEvent_mm] = MergeEvents(NewEvent_Date,NewEvent_mm,MinT);
-## ## end
-## ## % Adding a supporting initial extreme to avoid crashing the code later.
-## NewEvent_Date = c(Event_Date[1] - seconds(MaxT), NewEvent_Date)
-## NewEvent_mm = c(0, NewEvent_mm)
-## ## NewEvent_Date = cat(1,Event_Date(1)-MaxT,NewEvent_Date);
-## ## NewEvent_mm = cat(1,0,NewEvent_mm);
-## ## % Redistribute rainfall tips occurring at relatively long periods.
-## stop() # divide_events not currently working as expected - 444 tips added instead of 456
-## length(NewEvent_Date)
-## length(NewEvent_mm)
-
-## ## This is the input to divide_events
-## y <-
-##   read_csv("matlab_divide_events_input.csv", col_names = FALSE) %>%
-##   setNames(c("Date", "Prec")) %>%
+## x_aggr_matlab <-
+##   read_csv("inst/testdata/matlab_aggregation_cs_output_llo_p1.csv") %>%
+##   setNames(c("Date", "NewP", "CumP", "Single")) %>%
 ##   mutate(Date = (Date - 719529) * 86400) %>%
 ##   mutate(Date = as.POSIXct(Date, tz = "UTC", origin = "1970-01-01")) %>%
 ##   mutate(Date = round_date(Date, unit = "0.25 seconds")) %>%
 ##   mutate(Date = force_tz(Date, "Etc/GMT-5"))
 
-## x <- tibble(Date = NewEvent_Date, Prec = NewEvent_mm)
-## all.equal(y, x)
+## plot(x_aggr$Date, x_aggr$CumP, type="l", col="blue")
+## lines(x_aggr_matlab$Date, x_aggr_matlab$CumP, col="magenta")
 
-## ## NewEvent_mm is equal
-## ## TODO check dates - remove matlab formatting
-## x <- divide_events(NewEvent_Date, NewEvent_mm, MaxT)
+## NOT USED
 
-## ## ## I think the cause of the slight discrepancy is a precision error,
-## ## ## which causes some events separated by exactly 30 minutes (MaxT / 2)
-## ## ## to be identified as greater than MaxT / 2.
+## Event_Date <- x[["Date"]]
+## Event_mm <- x[["Event"]]
+## Minint = set_units(0.2, "mm/h")
+## Maxint = set_units(127, "mm/h")
+## Meanint = set_units(3, "mm/h")
+## Lowint = min(set_units(0.1, "mm/h"), Minint / 2) # FIXME [mm min^{-1}]
 
-## ## ## Test aggregation_cs using these values:
-## # y <-
-## #
-## ##   read_csv("matlab_divide_events_output.csv", col_names = FALSE) %>%
+## Event_Date = Event_Date - seconds(0.25)
+## ## Test identify_voids(...) function
+## Voids = identify_voids(p1) # FIXME - works, but is very slow
+## ## ## Event_Date = Event_Date # datenum(Event_Date)
+## ## NewEvent_Date = Event_Date
+## ## NewEvent_mm = Event_mm
+## ## NewEvent_mm[NewEvent_mm == 0] = NA
+## ## NewEvent_Date = NewEvent_Date[!is.na(NewEvent_mm)]
+## ## NewEvent_mm = NewEvent_mm[!is.na(NewEvent_mm)]
+
+## ## ## Test aggregate_events(...) and merge_events(...)
+## ## ## Maximum tip interval to separate events.
+## ## ## N.B.
+## ## ## * [bucket / Minint] gives the minimum time between tips in hours
+## ## ## * multiplying by [60 * (1 / nd)] converts to days
+## ## ## * we actually want the units in seconds, so instead of multiplying
+## ## ##   by [60 * (1 / nd)], we multiply by 3600
+## ## MaxT = set_units(bucket, "mm") / set_units(Minint, "mm/s")
+## ## ## Minimum tip interval to merge events.
+## ## MinT = set_units(bucket, "mm") / set_units(Maxint, "mm/s")
+## ## ## % Aggregate events to avoid large intensities
+## ## mintip = TRUE
+## ## ## if (mintip) {
+## ## ## Aggregate data at 1-min scale [WORKING]
+## ## x_aggr <- aggregate_events(NewEvent_Date, NewEvent_mm)
+## ## ## } else {
+## ## ## Merge rainfall tips occurring at extremely short periods [WORKING, but not tested properly with this dataset]
+## ## ## x_aggr = merge_events(NewEvent_Date, NewEvent_mm, MinT)
+
+## ## ## TODO work with dataframes throughout
+## ## NewEvent_Date = x_aggr$Date; NewEvent_mm = x_aggr$Prec
+## ## ## if mintip == true
+## ## ##     % Aggregate data at 1-min scale.
+## ## ##     [NewEvent_Date,NewEvent_mm] = AggregateEvents(NewEvent_Date,NewEvent_mm);
+## ## ## else
+## ## ##     % Merge rainfall tips occurring at extremely short periods.
+## ## ##     [NewEvent_Date,NewEvent_mm] = MergeEvents(NewEvent_Date,NewEvent_mm,MinT);
+## ## ## end
+## ## ## % Adding a supporting initial extreme to avoid crashing the code later.
+## ## NewEvent_Date = c(Event_Date[1] - seconds(MaxT), NewEvent_Date)
+## ## NewEvent_mm = c(0, NewEvent_mm)
+## ## ## NewEvent_Date = cat(1,Event_Date(1)-MaxT,NewEvent_Date);
+## ## ## NewEvent_mm = cat(1,0,NewEvent_mm);
+## ## ## % Redistribute rainfall tips occurring at relatively long periods.
+## ## stop() # divide_events not currently working as expected - 444 tips added instead of 456
+## ## length(NewEvent_Date)
+## ## length(NewEvent_mm)
+
+## ## ## This is the input to divide_events
+## ## y <-
+## ##   read_csv("matlab_divide_events_input.csv", col_names = FALSE) %>%
 ## ##   setNames(c("Date", "Prec")) %>%
 ## ##   mutate(Date = (Date - 719529) * 86400) %>%
 ## ##   mutate(Date = as.POSIXct(Date, tz = "UTC", origin = "1970-01-01")) %>%
 ## ##   mutate(Date = round_date(Date, unit = "0.25 seconds")) %>%
 ## ##   mutate(Date = force_tz(Date, "Etc/GMT-5"))
 
-## ## Event_Date = NewEvent_Date
-## ## Event_mm = NewEvent_mm
+## ## x <- tibble(Date = NewEvent_Date, Prec = NewEvent_mm)
+## ## all.equal(y, x)
 
-## NewEvent_Date = x$Date; NewEvent_mm = x$Prec
+## ## ## NewEvent_mm is equal
+## ## ## TODO check dates - remove matlab formatting
+## ## x <- divide_events(NewEvent_Date, NewEvent_mm, MaxT)
 
-## stop()
+## ## ## ## I think the cause of the slight discrepancy is a precision error,
+## ## ## ## which causes some events separated by exactly 30 minutes (MaxT / 2)
+## ## ## ## to be identified as greater than MaxT / 2.
 
-## ## d <- data.frame(a = seq(1,20), b = c(runif(3), rep(NA, 4), runif(3), rep(NA, 3), runif(6), rep(NA, 1)))
-## ## d %>% filter(is.na(b)) %>% mutate(c = c(2, diff(a))) %>% mutate(d = ifelse(c>1,a,b)) %>% mutate(e = ifelse(lead(c)>1, a, b)) %>% mutate(d = na.locf(d, na.rm = T), e = na.locf(e, na.rm = F, fromLast = TRUE))
+## ## ## ## Test aggregation_cs using these values:
+## ## # y <-
+## ## #
+## ## ##   read_csv("matlab_divide_events_output.csv", col_names = FALSE) %>%
+## ## ##   setNames(c("Date", "Prec")) %>%
+## ## ##   mutate(Date = (Date - 719529) * 86400) %>%
+## ## ##   mutate(Date = as.POSIXct(Date, tz = "UTC", origin = "1970-01-01")) %>%
+## ## ##   mutate(Date = round_date(Date, unit = "0.25 seconds")) %>%
+## ## ##   mutate(Date = force_tz(Date, "Etc/GMT-5"))
 
-## ## Original MATLAB version
-## ## %% AGGREGATE PRECIPITATION DATA TO MATCH DISCHARGE INTERVAL
-## ## % Determine discharge interval
-## ## int_HRes = diff(datenum(DateQ))*1440;
-## ## int_HRes = round(nanmedian(int_HRes)); % Worst discharge interval defines the max resolution
-## ## nd = 1440/int_HRes; % Number of intervals per day
-## ## % Interpolate each rain gauge data at max resolution using the CS algorithm
-## ## PrecHRes = cell(nrg,1);
-## ## for i = 1:nrg
-## ##     [PrecHRes{i}] = iMHEA_AggregationCS(varargin{2*i-1},NewEvent_mm{i},int_HRes,bucket);
-## ## end
+## ## ## Event_Date = NewEvent_Date
+## ## ## Event_mm = NewEvent_mm
 
-## stop()
+## ## NewEvent_Date = x$Date; NewEvent_mm = x$Prec
+
+## ## stop()
+
+## ## ## d <- data.frame(a = seq(1,20), b = c(runif(3), rep(NA, 4), runif(3), rep(NA, 3), runif(6), rep(NA, 1)))
+## ## ## d %>% filter(is.na(b)) %>% mutate(c = c(2, diff(a))) %>% mutate(d = ifelse(c>1,a,b)) %>% mutate(e = ifelse(lead(c)>1, a, b)) %>% mutate(d = na.locf(d, na.rm = T), e = na.locf(e, na.rm = F, fromLast = TRUE))
+
+## ## ## Original MATLAB version
+## ## ## %% AGGREGATE PRECIPITATION DATA TO MATCH DISCHARGE INTERVAL
+## ## ## % Determine discharge interval
+## ## ## int_HRes = diff(datenum(DateQ))*1440;
+## ## ## int_HRes = round(nanmedian(int_HRes)); % Worst discharge interval defines the max resolution
+## ## ## nd = 1440/int_HRes; % Number of intervals per day
+## ## ## % Interpolate each rain gauge data at max resolution using the CS algorithm
+## ## ## PrecHRes = cell(nrg,1);
+## ## ## for i = 1:nrg
+## ## ##     [PrecHRes{i}] = iMHEA_AggregationCS(varargin{2*i-1},NewEvent_mm{i},int_HRes,bucket);
+## ## ## end
+
+## ## stop()
 
 
-## ## iMHEA_Depure comparison
-## matlab_output_p1 = read_csv("inst/testdata/matlab_depure_output_llo_p1.csv")
-## matlab_output_p2 = read_csv("inst/testdata/matlab_depure_output_llo_p2.csv")
+## ## ## iMHEA_Depure comparison
+## ## matlab_output_p1 = read_csv("inst/testdata/matlab_depure_output_llo_p1.csv")
+## ## matlab_output_p2 = read_csv("inst/testdata/matlab_depure_output_llo_p2.csv")

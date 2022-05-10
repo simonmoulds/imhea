@@ -120,7 +120,8 @@ correct_negative_rate <- function(y, x1m, r1m, Lowint) {
     tot0 <- max(y)
     tot1 <- sum(r1m * one_minute)
     cond1 <- iter <= 10
-    cond2 <- abs((tot0 - tot1) * set_units(1, "1/h")) > Lowint
+    cond2 <- abs(tot0 - tot1) > (Lowint * one_minute)
+    ## FIXME slightly confusing with the units here - r1m/r2m always in mm/minute?
     cond3 <- any(round(r1m[r1m != zero_mmh], digits = 8) < Lowint)
     cond1 & (cond2 | cond3)
   }
