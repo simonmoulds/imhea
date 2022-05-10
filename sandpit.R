@@ -153,18 +153,23 @@ bucket <- set_units(0.2, "mm")
 mintip <- TRUE
 halves <- TRUE
 
-x_aggr <- aggregation_cs(x, timescale = timescale)
-
-## x_aggr_matlab <-
-##   read_csv("inst/testdata/matlab_aggregation_cs_output_llo_p1.csv") %>%
-##   setNames(c("Date", "NewP", "CumP", "Single")) %>%
-##   mutate(Date = (Date - 719529) * 86400) %>%
-##   mutate(Date = as.POSIXct(Date, tz = "UTC", origin = "1970-01-01")) %>%
-##   mutate(Date = round_date(Date, unit = "0.25 seconds")) %>%
-##   mutate(Date = force_tz(Date, "Etc/GMT-5"))
+x1 <- aggregation_cs(p1, timescale = timescale)
+## Not working properly:
+## Problem has to do with NewP and inclusion of voids
+x2 <- aggregation_cs(p2, timescale = timescale)
+x_aggr_matlab <-
+  read_csv("inst/testdata/matlab_aggregation_cs_output_llo_p2.csv") %>%
+  setNames(c("Date", "NewP", "CumP", "Single")) %>%
+  mutate(Date = (Date - 719529) * 86400) %>%
+  mutate(Date = as.POSIXct(Date, tz = "UTC", origin = "1970-01-01")) %>%
+  mutate(Date = round_date(Date, unit = "0.25 seconds")) %>%
+  mutate(Date = force_tz(Date, "Etc/GMT-5"))
+stop()
 
 ## plot(x_aggr$Date, x_aggr$CumP, type="l", col="blue")
 ## lines(x_aggr_matlab$Date, x_aggr_matlab$CumP, col="magenta")
+
+
 
 ## NOT USED
 

@@ -234,10 +234,9 @@ aggregation_cs <- function(x,
       x0 = set_units(NewEvent_mm[indx[i]], mm) / Meanint - one_minute
       xf = NewEvent_Date[indx[i]]
       ## Equally spaced divided tip [FIXME - equivalent to MATLAB?]
-      ## x = (xf - x0 * nd / 1440:xf)
-      x = seq(xf - minutes(set_units(x0, minute)), xf, by = "1 min")
+      x = seq(xf - minutes(round(set_units(x0, minute))), xf, by = "1 min")
       ## Initial date
-      DI = floor_date(xf - minutes(set_units(x0, minute)), unit = "minute")
+      DI = floor_date(xf - minutes(round(set_units(x0, minute))), unit = "minute")
       ## Final date
       DF = ceiling_date(xf, unit = "minute")  # Final date in [min]
       ## Equally spaced time interval
@@ -296,12 +295,12 @@ aggregation_cs <- function(x,
     rev(NewDate_1min)[1],
     by = paste0(drop_units(set_units(timescale, "min")), " min")
   )
-  nt <- length(NewDate)
+  ## nt <- length(NewDate)
+  scale_int <- drop_units(set_units(timescale, minute))
+  ix1 <- seq(scale_int + 1, length(CumP_1min), by = scale_int)
+  ix0 <- seq(1, length(CumP_1min) - scale_int, by = scale_int)
   if (halves) {
     ## Rainfall rate at scale interval obtained from fitted cumulative rainfall
-    scale_int <- drop_units(set_units(timescale, minute))
-    ix1 <- seq(scale_int + 1, length(CumP_1min), by = scale_int)
-    ix0 <- seq(1, length(CumP_1min) - scale_int, by = scale_int)
     NewP <- c(bucket / 2, (CumP_1min[ix1] - CumP_1min[ix0]))
     Single <- c(bucket / 2, (Single_1min[ix1] - Single_1min[ix0]))
   } else {

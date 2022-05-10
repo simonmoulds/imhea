@@ -96,7 +96,7 @@ correct_bias <- function(x, y, x1m, r1m) {
   y2m <- y2m %>% set_units(mm)
   if (halves) {
     ## Zero rainfall rates at borders
-    y2m[1] = zero_mm
+    y2m[1] = set_units(0, mm)
     y2m[length(y2m)] = rev(y2m)[2]
   }
   y2m
