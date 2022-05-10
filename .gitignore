@@ -1,3 +1,6 @@
+# Any random data files
+*.csv
+
 # Raw data files [for now]
 inst/extdata/
 
