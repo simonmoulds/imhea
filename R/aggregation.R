@@ -56,6 +56,7 @@ aggregation_cs <- function(x,
   Voids = identify_voids(tibble(Date = Event_Date, Event = Event_mm))
   NewEvent_Date = Event_Date
   NewEvent_mm = Event_mm
+  ## FIXME - is this
   NewEvent_Date = NewEvent_Date[!is.na(NewEvent_mm)]
   NewEvent_mm = NewEvent_mm[!is.na(NewEvent_mm)]
 
@@ -83,7 +84,6 @@ aggregation_cs <- function(x,
   x = divide_events(NewEvent_Date, NewEvent_mm, MaxT)
   NewEvent_Date = x$Date
   NewEvent_mm = x$Prec
-
   ## Remove initial extreme to avoid crashing the code later
   ## FIXME - is this step necessary?
   NewEvent_Date = NewEvent_Date[2:length(NewEvent_Date)]
@@ -129,7 +129,7 @@ aggregation_cs <- function(x,
 
   cat(sprintf("Interpolating data..."), "\n")
   pb = txtProgressBar(min = 0, max = length(n), initial = 0)
-  for (i in 1:length(n)) { #length(n)) {
+  for (i in 1:length(n)) {
     ## Procedure:
     ## * Events with more than 2 points (fit a CS) [Wang et al, 2008].
     ## * Events with only 2 points (fit a line) [Ciach, 2003].
@@ -269,6 +269,7 @@ aggregation_cs <- function(x,
       Single_1min[ix] = Single_1min[ix] + y1m
       Single_1min[NewDate_1min > DF] = Single_1min[NewDate_1min == DF]
     }
+    if (isTRUE(all.equal(round(as.numeric(max(CumP_1min))), 295))) print(i)
     setTxtProgressBar(pb, i)
   }
   close(pb)
@@ -355,16 +356,15 @@ aggregation_cs <- function(x,
 ## }
 ## localMin2(x)
 
-
 aggregate_events <- function(Event_Date, Event_mm) {
+  ## TODO convert this to Rcpp for speed
   ## Agregate rainfall at 1-min intervals.% Agregate rainfall at 1-min intervals.
   k = length(Event_mm)
-  DI = floor_date(min(Event_Date), "day") #* nd #% Initial date [day]
-  DF = ceiling_date(max(Event_Date), "day") # * nd #% Final date [day]
-  NewDate_1min = seq(DI, DF, by = "1 min") #' # % Equally spaced time interval
-  print(length(NewDate_1min))
-  n = length(NewDate_1min) #; % Number of 1-min intervals
-  NewP_1min = rep(0, length(NewDate_1min)) # % Initialise aggregation
+  DI = floor_date(min(Event_Date), "day")   # Initial date [day]
+  DF = ceiling_date(max(Event_Date), "day") # Final date [day]
+  NewDate_1min = seq(DI, DF, by = "1 min")  # Equally spaced time interval
+  n = length(NewDate_1min)                  # Number of 1-min intervals
+  NewP_1min = rep(0, length(NewDate_1min))  # Initialise aggregation
   if (Event_Date[1] == NewDate_1min[1]) {
       j = 2 # Data counter
       NewP_1min[1] = Event_mm[1]
@@ -393,6 +393,40 @@ aggregate_events <- function(Event_Date, Event_mm) {
   message(sprintf("Rainfall volume before aggregation: %8.2f mm", sum(Event_mm, na.rm = TRUE)))
   message(sprintf("Rainfall volume after aggregation: %8.2f mm", sum(NewP_1min, na.rm = TRUE)))
   tibble(Date = NewDate_1min, Prec = NewP_1min)
+  ## % Agregate rainfall at 1-min intervals.
+  ## k = length(Event_mm); % Length of input data
+  ## nd = 1440; % Number of minutes per day or numeric value of 1 minute: 1/1440
+  ## % Build a 1 minute cumulative rainfall curve
+  ## DI = floor(min(Event_Date))*nd; % Initial date [day]
+  ## DF = ceil(max(Event_Date))*nd; % Final date [day]
+  ## NewDate_1min = (DI:DF)'; % Equally spaced time interval
+  ## datetime(floor(min(Event_Date)),'ConvertFrom','datenum')
+  ## datetime(ceil(max(Event_Date)),'ConvertFrom','datenum')
+  ## size(NewDate_1min)
+  ## n = length(NewDate_1min); % Number of 1-min intervals
+  ## NewP_1min = zeros(size(NewDate_1min)); % Initialise aggregation
+  ## if nd*Event_Date(1)==NewDate_1min(1)
+  ##     j = 2; % Data counter
+  ##     NewP_1min(1) = Event_mm(1);
+  ## else
+  ##     j = 1; % Data counter
+  ## end
+  ## for i = 2:n
+  ##     % Aggregate values.
+  ##     while j<=k && nd*Event_Date(j)<=NewDate_1min(i) % && nd*Event_Date(j)>NewDate_1min(i-1)
+  ##         NewP_1min(i) = NewP_1min(i) + Event_mm(j);
+  ##         j = j+1;
+  ##     end
+  ## end
+  ## NewDate_1min = NewDate_1min/nd; % Rescale the date
+  ## % Delete zero events to help process relevant data only.
+  ## NewDate_1min(NewP_1min==0) = [];
+  ## NewP_1min(NewP_1min==0) = [];
+  ## fprintf('Routine for aggregating tips at 1-min time interval.\n')
+  ## fprintf('New number of data points: %4i.\n',length(NewP_1min))
+  ## fprintf('Rainfall volume before aggregation: %8.2f mm.\n',nansum(Event_mm))
+  ## fprintf('Rainfall volume after aggregation: %8.2f mm.\n',nansum(NewP_1min))
+  ## fprintf('\n')
 }
 
 

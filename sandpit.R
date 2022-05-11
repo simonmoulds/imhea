@@ -152,11 +152,29 @@ timescale <- set_units(60 * 5, "s")
 bucket <- set_units(0.2, "mm")
 mintip <- TRUE
 halves <- TRUE
-
+stop()
 x1 <- aggregation_cs(p1, timescale = timescale)
 ## Not working properly:
 ## Problem has to do with NewP and inclusion of voids
 x2 <- aggregation_cs(p2, timescale = timescale)
+
+x_div_matlab_input <-
+  read_csv("matlab_divide_events_input.csv", col_names = F) %>%
+  setNames(c("Date", "Prec")) %>%
+  mutate(Date = (Date - 719529) * 86400) %>%
+  mutate(Date = as.POSIXct(Date, tz = "UTC", origin = "1970-01-01")) %>%
+  mutate(Date = round_date(Date, unit = "0.25 seconds")) %>%
+  mutate(Date = force_tz(Date, "Etc/GMT-5"))
+
+x_div_matlab <-
+  read_csv("matlab_divide_events_output.csv", col_names = F) %>%
+  setNames(c("Date", "Prec")) %>%
+  mutate(Date = (Date - 719529) * 86400) %>%
+  mutate(Date = as.POSIXct(Date, tz = "UTC", origin = "1970-01-01")) %>%
+  mutate(Date = round_date(Date, unit = "0.25 seconds")) %>%
+  mutate(Date = force_tz(Date, "Etc/GMT-5"))
+
+
 x_aggr_matlab <-
   read_csv("inst/testdata/matlab_aggregation_cs_output_llo_p2.csv") %>%
   setNames(c("Date", "NewP", "CumP", "Single")) %>%
@@ -164,6 +182,8 @@ x_aggr_matlab <-
   mutate(Date = as.POSIXct(Date, tz = "UTC", origin = "1970-01-01")) %>%
   mutate(Date = round_date(Date, unit = "0.25 seconds")) %>%
   mutate(Date = force_tz(Date, "Etc/GMT-5"))
+x <- p2
+
 stop()
 
 ## plot(x_aggr$Date, x_aggr$CumP, type="l", col="blue")
