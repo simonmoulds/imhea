@@ -303,47 +303,22 @@ fill_gaps <- function(Date1, P1, Date2, P2, cutend = FALSE) {
   ## % NewDate1, 2   = dd/mm/yyyy hh:mm:ss [date format].
   ## % NewP1, NewP2  = Filled precipitation data [mm].
 
-  ## ## FOR TESTING
-  ## library(tidyverse)
-  ## library(lubridate)
-  ## file = "inst/extdata/iMHEA_raw/HUA/iMHEA_HUA_01_PD_01_raw.csv"
-  ## x <- readr::read_csv(file)
-  ## tz <- "Etc/GMT-5"
-  ## try(tz <- lutz::tz_lookup_coords(lat, lon, method = "accurate"), silent = TRUE)
-  ## options(digits.secs = 6)
-  ## Date1 <- x[["Date"]] %>% as.POSIXct(tz = tz, format = "%d/%m/%Y %H:%M:%OS")
-  ## P1 <- x[["Event mm"]]
-
   ## Check if data have the same temporal resolution
-  scale1 = diff(Date1)
-  scale2 = diff(Date2)
-  if (median(scale1) > median(scale2)) {
-    scale = round(median(scale1)) # Same temporal resolution
-    aggregation(Date1, P1, scale) # TODO
-    aggregation(Date2, P2, scale) # TODO
-    ## [Date1,P1] = iMHEA_Aggregation(Date1,P1,scale);
-    ## [Date2,P2] = iMHEA_Aggregation(Date2,P2,scale);
-  } else if (median(scale2) > median(scale1)) {
-    scale = round(median(scale2)) # Same temporal resolution
-    aggregation(Date1, P1, scale) # TODO
-    aggregation(Date2, P2, scale) # TODO
-    ## [Date1,P1] = iMHEA_Aggregation(Date1,P1,scale);
-    ## [Date2,P2] = iMHEA_Aggregation(Date2,P2,scale);
+  scale1 = median(diff(Date1))
+  scale2 = median(diff(Date2))
+  if (scale1 != scale2) {
+    scale <- max(scale1, scale2)
+    x1 <- aggregation(Date1, P1, scale) # TODO
+    x2 <- aggregation(Date2, P2, scale) # TODO
+    Date1 <- x1$Date
+    P1 <- x1$Prec
+    Date2 <- x2$Date
+    P2 <- x2$Prec
   } else {
-    scale = round(median(scale1))
-  } # FIXME
+    scale = round(scale1)
+  }
 
-  ## TODO work out if this is necessary - I think it is only being used for the side-effect of plotting/logging
-  ## %% VOID ASSESSMENT
-  ## % Run data gap assessment and print inventory.
-  ## fprintf('Data gap assessment of P1.\n')
-  ## [~] = iMHEA_Voids(Date1,P1,1);
-  ## fprintf('Data gap assessment of P2.\n')
-  ## [~] = iMHEA_Voids(Date2,P2,1);
-
-  ## CREATE UNIFIED DATE VECTOR AND ASSIGN CORRESPONDENT INPUT DATA
-  nd = 1440 / scale # Number of intervals per day
-  ## % Define initial and end dates and create single vector
+  ## Define initial and end dates and create single vector
   DI = min(Date1[1], Date2[1])
   DF = max(rev(Date1)[1], rev(Date2)[1])
   NewDate = seq(DI, DF, by = "1 min")

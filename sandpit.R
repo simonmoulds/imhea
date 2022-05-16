@@ -161,6 +161,47 @@ p2 <- p2 %>% arrange(Date)
 p2$Date %>% diff() %>% min()
 x2 <- aggregation_cs(p2, timescale = timescale)
 
+stop()
+
+## %% FILL PRECIPITATION GAPS AND OBTAIN SINGLE MATRIX
+## if nrg > 1
+##     % Fill Precipitation gaps between all combinations of rain gauges
+##     combinations = combnk(1:nrg,2);
+##     combin_index = size(combinations,1);
+##     PrecHResFill = cell(combin_index,1);
+##     c = nan(combin_index,1);
+##     d = nan(combin_index,1);
+##     for i = 1:combin_index
+##         a = PrecHRes{combinations(i,1)};
+##         b = PrecHRes{combinations(i,2)};
+##         [PrecHResFill{i}] = iMHEA_FillGaps(a(:,1),a(:,2),b(:,1),b(:,2));
+##         c(i) = PrecHResFill{i}(1,1);
+##         d(i) = PrecHResFill{i}(end,1);
+##     end
+##     % Extend start and end of vectors to cover the same date period.
+##     date_start = round(min(c)*nd);
+##     date_end   = round(max(d)*nd);
+##     % Create high resolution matrix
+##     DateP_HRes = (date_start:date_end)';
+##     Precp_Fill_Compiled = nan(length(DateP_HRes),2*combin_index);
+##     for i = 1:combin_index
+##         % Compile precipitation data in a single matrix.
+##         DateAux = round(PrecHResFill{i}(:,1)*nd);
+##         Precp_Fill_Compiled(ismember(DateP_HRes,DateAux),2*i-1:2*i) = PrecHResFill{i}(:,2:3);
+##     end
+##     % Obtain average Precipitation
+##     P_HRes = nanmean(Precp_Fill_Compiled,2);
+##     % Rescale the date
+##     DateP_HRes = DateP_HRes/nd;
+## else
+##     % Obtain average Precipitation and create high resolution matrix
+##     DateP_HRes = PrecHRes{1}(:,1);
+##     P_HRes = PrecHRes{1}(:,2);
+## end
+
+
+## NOT USED
+
 ## x_aggr_matlab_input <-
 ##   read_csv("matlab_aggregate_events_input.csv", col_names = F) %>%
 ##   setNames(c("Date", "Prec")) %>%
@@ -193,14 +234,8 @@ x2 <- aggregation_cs(p2, timescale = timescale)
 ##   mutate(Date = round_date(Date, unit = "0.25 seconds")) %>%
 ##   mutate(Date = force_tz(Date, "Etc/GMT-5"))
 
-stop()
-
-plot(x2$Date, x2$CumP, type="l", col="blue")
-lines(x_aggr_matlab$Date, x_aggr_matlab$CumP, col="magenta")
-
-
-
-## NOT USED
+## plot(x2$Date, x2$CumP, type="l", col="blue")
+## lines(x_aggr_matlab$Date, x_aggr_matlab$CumP, col="magenta")
 
 ## Event_Date <- x[["Date"]]
 ## Event_mm <- x[["Event"]]
