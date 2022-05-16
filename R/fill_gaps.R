@@ -70,7 +70,7 @@ fill_gaps <- function(Date1,
       NewP1[match(Date1, NewDate)] = P1
       NewP2[match(Date2, NewDate)] = P2
     }
-    return(data.frame(NewDate, NewP1, NewP2))
+    ## return(data.frame(NewDate, NewP1, NewP2))
   }
   ## Fill data gaps
   auxCumP1 = cumsum(auxP1)
@@ -87,7 +87,7 @@ fill_gaps <- function(Date1,
       NewP1[match(Date1, NewDate)] = P1
       NewP2[match(Date2, NewDate)] = P2
     }
-    return(data.frame(NewDate, NewP1, NewP2))
+    ## return(data.frame(NewDate, NewP1, NewP2))
   }
   ## FIXME - what is M?
   ## NewP1(isnan(NewP1)) = NewP2(isnan(NewP1))/M;
@@ -97,7 +97,75 @@ fill_gaps <- function(Date1,
     NewP1[match(Date1, NewDate)] = P1
     NewP2[match(Date2, NewDate)] = P2
   }
-  NewDate1 = data.frame(NewDate, NewP1, NewP2)
+  ## NewDate1 = data.frame(NewDate, NewP1, NewP2)
+  tibble(Date = NewDate, Prec1 = NewP1, Prec2 = NewP2)
+}
+
+aggregation <- function(Date, P, timescale, ...) {
+  ## Agregation of rainfall within an interval
+  ##
+  ## Input:
+  ## Date  = dd/mm/yyyy hh:mm:ss [date format].
+  ## P     = Precipitation [mm].
+  ## scale = Agregation interval [min].
+  ## flag  = leave empty NOT to run the data voids assessment and plots.
+  ##
+  ## Output:
+  ## NewDate   = dd/mm/yyyy hh:mm:ss [date format] at specified interval.
+  ## NewP      = Agregated Precipitation [mm].
+  ## CumP      = Cumulative rainfall [mm].
+  ## VoidP     = Void intervals [mm].
+  ## MaxP      = Maximum intensity for specified interval [mm].
+  Date = Date - seconds(0.25)
+  Voids = identify_voids(Date, P)
+  DI = ceiling_date(min(Date)) # Initial date
+  DF = ceiling_date(max(Date)) # Final date
+  NewDate = seq(DI, DF, by = "1 min")
+  n = length(NewDate) # Number of intervals
+  NewP = rep(0, length(NewDate)) # Initialize aggregation
+  zero_ix <- (P == 0) | is.na(P)
+  Date = Date[!zero_ix]
+  P = P[!zero_ix]
+  k = length(P) # Length of input data
+  ## Set initial counter
+  if (Date[1] == NewDate[1]) {
+    j = 2
+    NewP[1] = P[1]
+  } else {
+    j = 1
+  }
+  for (i in j:n) {
+    ## Aggregate values
+    ## while j<=k && nd*Date(j)<=NewDate(i) % && nd*Date(j)>NewDate(i-1)
+    while ((j <= k) && (Date[j] <= NewDate[i])) {
+      NewP[i] = NewP[i] + P[j]
+      j = j + 1
+    }
+  }
+  ## Fill gaps between data when there is only one value missing
+  for (i in 2:(n-1)) {
+    if (is.na(NewP[i])) {
+      NewP[i] = 0
+    }
+  }
+  CumP <- cumsum(NewP)
+  ## Placing data gaps again in the aggregated vectors
+  VoidP <- NewP
+  ## Incorporate data voids
+  for (i in 1:nrow(Voids)) {
+    idx = NewDate > Voids[i,1] & NewDate < Voids[i,2]
+    CumP[idx] = NA
+    NewP[idx] = NA
+  }
+  VoidP[!is.na(NewP)] <- NA
+  ## Correct the last row
+  if (rev(NewP)[1] == 0 && (is.na(rev(NewP)[2]))) {
+    VoidP[length(VoidP)] <- NewP[length(NewP)]
+    NewP[length(NewP)] <- NA
+    CumP[length(NewP)] <- NA
+  }
+  ## MaxP <- max(NewP, na.rm = TRUE) # Maximum intensity
+  tibble(Date = NewDate, Prec = NewP)
 }
 
 average <- function(Date, Q, scale) {
@@ -119,14 +187,8 @@ average <- function(Date, Q, scale) {
   ## % MeanQ     = Mean value for specified interval [l/s, m3/s, mm].
   ## % MaxQ      = Maximum value for specified interval [l/s, m3/s, mm].
   ## % MinQ      = Minimum value for specified interval [l/s, m3/s, mm].
-  ## %
-  ## % Boris Ochoa Tocachi
-  ## % Imperial College London
-  ## % Created in May, 2014
-  ## % Last edited in November, 2017
   Date = Date - seconds(0.25)
   Voids = identify_voids(Date, Q)
-  nd = 1440 / scale
   DI = ceiling_date(min(Date)) # Initial date
   DF = ceiling_date(max(Date)) # Final date
   NewDate = seq(DI, DF, by = "1 min")
@@ -181,10 +243,11 @@ average <- function(Date, Q, scale) {
     NewQ[length(NewQ)] = NA
     CumQ[length(CumQ)] = NA
   }
-  MeanQ = mean(NewQ, na.rm = TRUE)
-  MaxQ = max(NewQ, na.rm = TRUE)
-  MinQ = min(NewQ, na.rm = TRUE)
-  return(data.frame(NewDate, NewQ, CumQ, VoidQ))
+  ## MeanQ = mean(NewQ, na.rm = TRUE)
+  ## MaxQ = max(NewQ, na.rm = TRUE)
+  ## MinQ = min(NewQ, na.rm = TRUE)
+  tibble(Date = NewDate, Q = NewQ)
+  ## return(data.frame(NewDate, NewQ, CumQ, VoidQ))
 }
 ## %% CHECK IF DATA ARE AT THE SAME TEMPORAL RESOLUTION
 ## scale1 = diff(datenum(Date1))*1440;
