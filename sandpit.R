@@ -152,17 +152,67 @@ timescale <- set_units(60 * 5, "s")
 bucket <- set_units(0.2, "mm")
 mintip <- TRUE
 halves <- TRUE
-stop()
-x1 <- aggregation_cs(p1, timescale = timescale)
-## Not working properly:
-## Problem arises because of negative time differences
-p2$Date %>% diff() %>% min()
-p2 <- p2 %>% arrange(Date)
-p2$Date %>% diff() %>% min()
-x2 <- aggregation_cs(p2, timescale = timescale)
 
+## This works, but using Matlab output directly for testing
+## x1 <- aggregation_cs(p1, timescale = timescale)
+## ## Not working properly:
+## ## Problem arises because of negative time differences
+## p2$Date %>% diff() %>% min()
+## p2 <- p2 %>% arrange(Date)
+## p2$Date %>% diff() %>% min()
+## x2 <- aggregation_cs(p2, timescale = timescale)
+
+x1 <-
+  read_csv("inst/testdata/matlab_aggregation_cs_output_llo_p1.csv") %>%
+  setNames(c("Date", "NewP", "CumP", "Single")) %>%
+  mutate(Date = (Date - 719529) * 86400) %>%
+  mutate(Date = as.POSIXct(Date, tz = "UTC", origin = "1970-01-01")) %>%
+  mutate(Date = round_date(Date, unit = "0.25 seconds")) %>%
+  mutate(Date = force_tz(Date, "Etc/GMT-5"))
+
+x2 <-
+  read_csv("inst/testdata/matlab_aggregation_cs_output_llo_p2.csv") %>%
+  setNames(c("Date", "NewP", "CumP", "Single")) %>%
+  mutate(Date = (Date - 719529) * 86400) %>%
+  mutate(Date = as.POSIXct(Date, tz = "UTC", origin = "1970-01-01")) %>%
+  mutate(Date = round_date(Date, unit = "0.25 seconds")) %>%
+  mutate(Date = force_tz(Date, "Etc/GMT-5"))
+
+Date1 <- x1$Date
+P1 <- x1$NewP
+Date2 <- x2$Date
+P2 <- x2$NewP
 stop()
 
+x_fill <- fill_gaps(x1$Date, x1$NewP, x2$Date, x2$NewP)
+
+x_matlab_fill_gaps_output <-
+  read_csv("inst/testdata/matlab_fill_gaps_output_llo_p1.csv") %>%
+  setNames(c("Date", "P1", "P2")) %>%
+  mutate(Date = (Date - 719529) * 86400) %>%
+  mutate(Date = as.POSIXct(Date, tz = "UTC", origin = "1970-01-01")) %>%
+  mutate(Date = round_date(Date, unit = "0.25 seconds")) %>%
+  mutate(Date = force_tz(Date, "Etc/GMT-5"))
+
+PrecHRes <- list(x1, x2)
+nrg <- 2
+if (nrg > 1) {
+  ## Fill precipitation gaps between all combinations of rain gauges
+  combinations <- combn(1:nrg, 2)
+  combn_index <- dim(combinations)[2]
+  PrecHResFill <- list()
+  for (i in 1:combn_index) {
+    ## a = PrecHRes[[combinations[1,i]]]
+    ## b = PrecHRes[[combinations[2,i]]]
+    a <- x1
+    b <- x2
+    PrecHResFill[[i]] <- fill_gaps(a, b)
+  }
+  ## DI <- min(sapply(PrecHResFill, FUN=function(x) x$Date[1]))
+  ## DF <- max(sapply(PrecHResFill, FUN=function(x), rev(x$Date)[1]))
+  ## DateP_HRes = seq(DI, DF, by = "1 min") # 1 minute???
+  ## Precp_Fill_Compiled <-
+}
 ## %% FILL PRECIPITATION GAPS AND OBTAIN SINGLE MATRIX
 ## if nrg > 1
 ##     % Fill Precipitation gaps between all combinations of rain gauges

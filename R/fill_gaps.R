@@ -35,7 +35,7 @@ fill_gaps <- function(Date1,
   ## Define initial and end dates and create single vector
   DI = min(Date1[1], Date2[1])
   DF = max(rev(Date1)[1], rev(Date2)[1])
-  NewDate = seq(DI, DF, by = "1 min")
+  NewDate = seq(DI, DF, by = "1 min") # FIXME by = ... should be scale
   ## Assign data when they correspond
   NewP1 = rep(NA, length(NewDate))
   NewP2 = rep(NA, length(NewDate))
@@ -75,10 +75,11 @@ fill_gaps <- function(Date1,
   ## Fill data gaps
   auxCumP1 = cumsum(auxP1)
   auxCumP2 = cumsum(auxP2)
-  mod = lm(auxCumP1, aux)
+  mod = lm(auxCumP1 ~ auxCumP2)
   r2 = summary(mod)$r.squared
   ## Fill gaps only if the correlation is almost perfect
-  if (R < 0.99) {
+  if (r2 < 0.99) {
+    message(sprintf('The correlation is not significant as to fill the data, with R2 = %6.4f.', r2))
     if (cutend) {
       NewDate = seq(DI, DF, sep = "1 min")
       ## Assign data when they correspond
@@ -87,7 +88,7 @@ fill_gaps <- function(Date1,
       NewP1[match(Date1, NewDate)] = P1
       NewP2[match(Date2, NewDate)] = P2
     }
-    ## return(data.frame(NewDate, NewP1, NewP2))
+    return(tibble(Date = NewDate, Prec1 = NewP1, Prec2 = NewP2))
   }
   ## FIXME - what is M?
   ## NewP1(isnan(NewP1)) = NewP2(isnan(NewP1))/M;
@@ -420,4 +421,4 @@ average <- function(Date, Q, scale) {
 ## if nargout == 1
 ##     NewDate1 = [NewDate/nd,NewP1,NewP2];
 ## end
-}
+## }
