@@ -18,8 +18,8 @@ fill_gaps <- function(Date1,
                       ...) {
 
   ## Check if data have the same temporal resolution
-  scale1 = median(diff(Date1))
-  scale2 = median(diff(Date2))
+  scale1 = median(diff(Date1)) %>% as.numeric(units = "mins")
+  scale2 = median(diff(Date2)) %>% as.numeric(units = "mins")
   if (scale1 != scale2) {
     scale <- max(scale1, scale2)
     x1 <- aggregation(Date1, P1, scale) # TODO
@@ -35,7 +35,7 @@ fill_gaps <- function(Date1,
   ## Define initial and end dates and create single vector
   DI = min(Date1[1], Date2[1])
   DF = max(rev(Date1)[1], rev(Date2)[1])
-  NewDate = seq(DI, DF, by = "1 min") # FIXME by = ... should be scale
+  NewDate = seq(DI, DF, by = paste0(scale, " min"))
   ## Assign data when they correspond
   NewP1 = rep(NA, length(NewDate))
   NewP2 = rep(NA, length(NewDate))
@@ -73,10 +73,11 @@ fill_gaps <- function(Date1,
     ## return(data.frame(NewDate, NewP1, NewP2))
   }
   ## Fill data gaps
-  auxCumP1 = cumsum(auxP1)
-  auxCumP2 = cumsum(auxP2)
-  mod = lm(auxCumP1 ~ auxCumP2)
-  r2 = summary(mod)$r.squared
+  auxCumP1 <- cumsum(auxP1)
+  auxCumP2 <- cumsum(auxP2)
+  mod <- lm(auxCumP2 ~ auxCumP1)
+  r2 <- summary(mod)$r.squared
+  coef <- coefficients(mod)[2]
   ## Fill gaps only if the correlation is almost perfect
   if (r2 < 0.99) {
     message(sprintf('The correlation is not significant as to fill the data, with R2 = %6.4f.', r2))
@@ -90,7 +91,8 @@ fill_gaps <- function(Date1,
     }
     return(tibble(Date = NewDate, Prec1 = NewP1, Prec2 = NewP2))
   }
-  ## FIXME - what is M?
+  NewP1[is.na(NewP1)] = NewP2[is.na(NewP1)] / coef
+  NewP2[is.na(NewP2)] = NewP1[is.na(NewP2)] * coef
   ## NewP1(isnan(NewP1)) = NewP2(isnan(NewP1))/M;
   ## NewP2(isnan(NewP2)) = NewP1(isnan(NewP2))*M;
   if (cutend) {

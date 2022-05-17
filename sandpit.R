@@ -182,8 +182,8 @@ Date1 <- x1$Date
 P1 <- x1$NewP
 Date2 <- x2$Date
 P2 <- x2$NewP
-stop()
 
+## This works (at least the parts that I've tested)
 x_fill <- fill_gaps(x1$Date, x1$NewP, x2$Date, x2$NewP)
 
 x_matlab_fill_gaps_output <-
@@ -193,6 +193,8 @@ x_matlab_fill_gaps_output <-
   mutate(Date = as.POSIXct(Date, tz = "UTC", origin = "1970-01-01")) %>%
   mutate(Date = round_date(Date, unit = "0.25 seconds")) %>%
   mutate(Date = force_tz(Date, "Etc/GMT-5"))
+
+stop()
 
 PrecHRes <- list(x1, x2)
 nrg <- 2
