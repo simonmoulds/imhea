@@ -19,10 +19,22 @@ identify_voids <- function(x, ...) {
   NoVoids = Voids
   v = 1
   nv = 1
-
   Date <- c(Date, rev(Date)[1])
+  ## https://stackoverflow.com/a/35162775
+  ## voids <-
+  ##   x %>%
+  ##   mutate(Q = ifelse(is.na(Q), 0, 1)) %>%
+  ##   group_by(group = cumsum(c(0, diff(Q) != 0))) %>%
+  ##   filter(Q == 1 & n() > 1) %>%
+  ##   summarize("Start Date" = min(Date),
+  ##             "End Date" = max(Date),
+  ##             "Length of Run" = n()) #%>%
+  ##   ungroup() %>%
+  ##   select(-matches("group"))
   ## Determine data gaps
+  ## TODO add progress bar
   for (jv in 1:k) {
+    print(jv)
     if (is.na(Data[jv])) {
       ## v = v + 1
       Voids[v, 1] = Date[jv] # Initial date of void interval

@@ -120,10 +120,10 @@ aggregation <- function(Date, P, timescale, ...) {
   ## VoidP     = Void intervals [mm].
   ## MaxP      = Maximum intensity for specified interval [mm].
   Date = Date - seconds(0.25)
-  Voids = identify_voids(Date, P)
+  Voids = identify_voids(tibble(Date = Date, Event = P))
   DI = ceiling_date(min(Date)) # Initial date
   DF = ceiling_date(max(Date)) # Final date
-  NewDate = seq(DI, DF, by = "1 min")
+  NewDate = seq(DI, DF, by = paste0(timescale, " min"))
   n = length(NewDate) # Number of intervals
   NewP = rep(0, length(NewDate)) # Initialize aggregation
   zero_ix <- (P == 0) | is.na(P)
@@ -171,7 +171,7 @@ aggregation <- function(Date, P, timescale, ...) {
   tibble(Date = NewDate, Prec = NewP)
 }
 
-average <- function(Date, Q, scale) {
+average <- function(Date, Q, timescale) {
   ## %iMHEA Agregation of hydrological data (average within an interval).
   ## % [NewDate,NewQ,CumQ,VoidQ,MeanQ,MaxQ,MinQ] =
   ## % iMHEA_Average(Date,Q,scale,flag) averages discharge data.
@@ -191,10 +191,12 @@ average <- function(Date, Q, scale) {
   ## % MaxQ      = Maximum value for specified interval [l/s, m3/s, mm].
   ## % MinQ      = Minimum value for specified interval [l/s, m3/s, mm].
   Date = Date - seconds(0.25)
-  Voids = identify_voids(Date, Q)
+  ## TODO speed up identify voids - very slow at the moment
+  Voids = identify_voids(tibble(Date = Date, Event = Q))
+  ## Voids = identify_voids(Date, Q)
   DI = ceiling_date(min(Date)) # Initial date
   DF = ceiling_date(max(Date)) # Final date
-  NewDate = seq(DI, DF, by = "1 min")
+  NewDate = seq(DI, DF, by = paste0(timescale, " min"))
   n = length(NewDate) # Number of intervals
   NewQ = rep(0, length(NewDate)) # Initialize aggregation
   Date = Date[!is.na(Q)]

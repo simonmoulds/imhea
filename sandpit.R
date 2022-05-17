@@ -194,8 +194,6 @@ x_matlab_fill_gaps_output <-
   mutate(Date = round_date(Date, unit = "0.25 seconds")) %>%
   mutate(Date = force_tz(Date, "Etc/GMT-5"))
 
-stop()
-
 PrecHRes <- list(x1, x2)
 nrg <- 2
 if (nrg > 1) {
@@ -204,53 +202,31 @@ if (nrg > 1) {
   combn_index <- dim(combinations)[2]
   PrecHResFill <- list()
   for (i in 1:combn_index) {
-    ## a = PrecHRes[[combinations[1,i]]]
-    ## b = PrecHRes[[combinations[2,i]]]
     a <- x1
     b <- x2
-    PrecHResFill[[i]] <- fill_gaps(a, b)
+    PrecHResFill[[i]] <-
+      fill_gaps(a$Date, a$NewP, b$Date, b$NewP) %>%
+      setNames(c("Date", paste0("P1_", i), paste0("P2_", i)))
   }
-  ## DI <- min(sapply(PrecHResFill, FUN=function(x) x$Date[1]))
-  ## DF <- max(sapply(PrecHResFill, FUN=function(x), rev(x$Date)[1]))
-  ## DateP_HRes = seq(DI, DF, by = "1 min") # 1 minute???
-  ## Precp_Fill_Compiled <-
+  myfun <- function(x, y, ...) full_join(x, y, by = "Date")
+  Precp_Fill_Compiled <-
+    Reduce(myfun, PrecHResFill) %>%
+    gather(-Date, key = "key", value = "value") %>%
+    group_by(Date) %>%
+    summarize(P_HRes = mean(value, na.rm = TRUE))
+  DateP_HRes <- Precp_Fill_Compiled$Date
+  P_HRes <- Precp_Fill_Compiled$P_HRes
+} else {
+  DateP_HRes <- PrecHRes[[1]]$Date
+  P_HRes <- PrecHRes[[1]]$NewP
 }
-## %% FILL PRECIPITATION GAPS AND OBTAIN SINGLE MATRIX
-## if nrg > 1
-##     % Fill Precipitation gaps between all combinations of rain gauges
-##     combinations = combnk(1:nrg,2);
-##     combin_index = size(combinations,1);
-##     PrecHResFill = cell(combin_index,1);
-##     c = nan(combin_index,1);
-##     d = nan(combin_index,1);
-##     for i = 1:combin_index
-##         a = PrecHRes{combinations(i,1)};
-##         b = PrecHRes{combinations(i,2)};
-##         [PrecHResFill{i}] = iMHEA_FillGaps(a(:,1),a(:,2),b(:,1),b(:,2));
-##         c(i) = PrecHResFill{i}(1,1);
-##         d(i) = PrecHResFill{i}(end,1);
-##     end
-##     % Extend start and end of vectors to cover the same date period.
-##     date_start = round(min(c)*nd);
-##     date_end   = round(max(d)*nd);
-##     % Create high resolution matrix
-##     DateP_HRes = (date_start:date_end)';
-##     Precp_Fill_Compiled = nan(length(DateP_HRes),2*combin_index);
-##     for i = 1:combin_index
-##         % Compile precipitation data in a single matrix.
-##         DateAux = round(PrecHResFill{i}(:,1)*nd);
-##         Precp_Fill_Compiled(ismember(DateP_HRes,DateAux),2*i-1:2*i) = PrecHResFill{i}(:,2:3);
-##     end
-##     % Obtain average Precipitation
-##     P_HRes = nanmean(Precp_Fill_Compiled,2);
-##     % Rescale the date
-##     DateP_HRes = DateP_HRes/nd;
-## else
-##     % Obtain average Precipitation and create high resolution matrix
-##     DateP_HRes = PrecHRes{1}(:,1);
-##     P_HRes = PrecHRes{1}(:,2);
-## end
 
+stop()
+
+Date <- q1$Date
+Q <- q1$Q
+q1 <- average(q1$Date, q1$Q, int_HRes / 60)
+## TODO speed up identify_voids
 
 ## NOT USED
 
