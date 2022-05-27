@@ -226,8 +226,13 @@ stop()
 Date <- q1$Date
 Q <- q1$Q
 q1 <- average(q1$Date, q1$Q, int_HRes / 60)
+
 ## TODO speed up identify_voids
 
+## https://stackoverflow.com/a/35162775
+x <- p1 # TODO remove Key
+x <- x %>% as_tibble()
+v <- x %>% identify_voids()
 ## NOT USED
 
 ## x_aggr_matlab_input <-

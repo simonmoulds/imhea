@@ -196,7 +196,9 @@ average <- function(Date, Q, timescale) {
   ## Voids = identify_voids(Date, Q)
   DI = ceiling_date(min(Date)) # Initial date
   DF = ceiling_date(max(Date)) # Final date
-  NewDate = seq(DI, DF, by = paste0(timescale, " min"))
+  NewDate = seq(
+    DI, DF, by = paste0(as.numeric(set_units(timescale, "min")), " min")
+  )
   n = length(NewDate) # Number of intervals
   NewQ = rep(0, length(NewDate)) # Initialize aggregation
   Date = Date[!is.na(Q)]

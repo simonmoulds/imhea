@@ -7,60 +7,62 @@
 #'
 #' @return tsibble
 identify_voids <- function(x, ...) {
-  Date <- x[["Date"]]
-  Data <- x[["Event"]] # FIXME
-
-  ## INITIALISE VARIABLES
-  k = length(Data)
-  Voids = data.frame(
-    a = as.POSIXct(rep(NA, k), tz = tz(Date)),
-    b = as.POSIXct(rep(NA, k), tz = tz(Date))
-  )
-  NoVoids = Voids
-  v = 1
-  nv = 1
-  Date <- c(Date, rev(Date)[1])
-  ## https://stackoverflow.com/a/35162775
-  ## voids <-
-  ##   x %>%
-  ##   mutate(Q = ifelse(is.na(Q), 0, 1)) %>%
-  ##   group_by(group = cumsum(c(0, diff(Q) != 0))) %>%
-  ##   filter(Q == 1 & n() > 1) %>%
-  ##   summarize("Start Date" = min(Date),
-  ##             "End Date" = max(Date),
-  ##             "Length of Run" = n()) #%>%
-  ##   ungroup() %>%
-  ##   select(-matches("group"))
-  ## Determine data gaps
-  ## TODO add progress bar
-  for (jv in 1:k) {
-    print(jv)
-    if (is.na(Data[jv])) {
-      ## v = v + 1
-      Voids[v, 1] = Date[jv] # Initial date of void interval
-      Voids[v, 2] = Date[jv + 1] # Final date of void interval
-      if (isTRUE(Voids[v, 1] == Voids[v-1, 2])) {
-        v = v - 1 # Aggregate continuous voids
-        Voids[v, 2] = Voids[v+1, 2]
-        Voids[v + 1,] = NA # FIXME
-        # Voids(v+1,:) = [];
-      }
-      v = v + 1
-    } else {
-      ## nv = nv + 1
-      NoVoids[nv, 1] = Date[jv] # Initial date of no-void interval
-      NoVoids[nv, 2] = Date[jv+1] # Final date of no-void interval
-      if (isTRUE(NoVoids[nv, 1] == NoVoids[nv-1, 2])) {
-        nv = nv - 1
-        NoVoids[nv, 2] = NoVoids[nv+1, 2]
-        # NoVoids(nv+1,:) = [];
-        NoVoids[nv+1,] = NA
-      }
-      nv = nv + 1
-    }
-  }
-  Voids = na.omit(Voids)
-  NoVoids = na.omit(NoVoids)
+  Voids <- x %>% contiguous_na()
+  NoVoids <- x %>% mutate(Event = ifelse(is.na(Event), 1, NA)) %>% contiguous_na()
+  ## Date <- x[["Date"]]
+  ## Data <- x[["Event"]] # FIXME
+  ## ## INITIALISE VARIABLES
+  ## k = length(Data)
+  ## Voids = data.frame(
+  ##   a = as.POSIXct(rep(NA, k), tz = tz(Date)),
+  ##   b = as.POSIXct(rep(NA, k), tz = tz(Date))
+  ## )
+  ## NoVoids = Voids
+  ## v = 1
+  ## nv = 1
+  ## Date <- c(Date, rev(Date)[1])
+  ## ## https://stackoverflow.com/a/35162775
+  ## ## voids <-
+  ## ##   x %>%
+  ## ##   mutate(Q = ifelse(is.na(Q), 0, 1)) %>%
+  ## ##   group_by(group = cumsum(c(0, diff(Q) != 0))) %>%
+  ## ##   filter(Q == 1 & n() > 1) %>%
+  ## ##   summarize("Start Date" = min(Date),
+  ## ##             "End Date" = max(Date),
+  ## ##             "Length of Run" = n()) #%>%
+  ## ##   ungroup() %>%
+  ## ##   select(-matches("group"))
+  ## ## Determine data gaps
+  ## ## TODO add progress bar
+  ## for (jv in 1:k) {
+  ##   if (is.na(Data[jv])) {
+  ##     ## v = v + 1
+  ##     Voids[v, 1] = Date[jv] # Initial date of void interval
+  ##     Voids[v, 2] = Date[jv + 1] # Final date of void interval
+  ##     if (isTRUE(Voids[v, 1] == Voids[v-1, 2])) {
+  ##       v = v - 1 # Aggregate continuous voids
+  ##       Voids[v, 2] = Voids[v+1, 2]
+  ##       Voids[v + 1,] = NA # FIXME
+  ##       # Voids(v+1,:) = [];
+  ##     }
+  ##     v = v + 1
+  ##   } else {
+  ##     ## nv = nv + 1
+  ##     NoVoids[nv, 1] = Date[jv] # Initial date of no-void interval
+  ##     NoVoids[nv, 2] = Date[jv+1] # Final date of no-void interval
+  ##     if (isTRUE(NoVoids[nv, 1] == NoVoids[nv-1, 2])) {
+  ##       nv = nv - 1
+  ##       NoVoids[nv, 2] = NoVoids[nv+1, 2]
+  ##       # NoVoids(nv+1,:) = [];
+  ##       NoVoids[nv+1,] = NA
+  ##     }
+  ##     nv = nv + 1
+  ##   }
+  ## }
+  ## Voids = na.omit(Voids)
+  ## NoVoids = na.omit(NoVoids)
+  v <- nrow(Voids)
+  nv <- nrow(NoVoids)
   message(sprintf("Identification of data gaps:"))
   message(sprintf("Data:\tInitial Date\t\tFinal Data"))
   for (i in 1:(nv - 1)) {
@@ -71,6 +73,25 @@ identify_voids <- function(x, ...) {
     message(sprintf("\t%s\t%s", Voids[i,1], Voids[i,2]))
   }
   Voids
+}
+
+contiguous_na <- function(x, ...) {
+  voids <-
+    x %>%
+    dplyr::select(Date, Event) %>%
+    mutate(Event = ifelse(is.na(Event), 0, 1)) %>%
+    mutate(group = cumsum(c(0, diff(Event) != 0))) %>%
+    mutate(group = c(0, diff(group))) %>%
+    filter(group > 0) %>%
+    dplyr::select(-group)
+  voids_start <- voids$Date[voids$Event == 0]
+  voids_end <- voids$Date[voids$Event == 1]
+  if (is.na(x$Event[1]))
+    voids_start <- c(x$Date[1], voids_start)
+  if (is.na(rev(x$Event)[1]))
+    voids_end <- c(voids_end, rev(x$Date)[1])
+  voids <- data.frame(start = voids_start, end = voids_end)
+  voids
 }
 
 ## function [Voids,NoVoids] = iMHEA_Voids(Date,Data,varargin)
