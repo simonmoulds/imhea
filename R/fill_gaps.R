@@ -191,70 +191,89 @@ average <- function(Date, Q, timescale) {
   ## % MaxQ      = Maximum value for specified interval [l/s, m3/s, mm].
   ## % MinQ      = Minimum value for specified interval [l/s, m3/s, mm].
   Date = Date - seconds(0.25)
-  ## TODO speed up identify voids - very slow at the moment
-  Voids = identify_voids(tibble(Date = Date, Event = Q))
+  ## Voids = identify_voids(tibble(Date = Date, Event = Q))
   ## Voids = identify_voids(Date, Q)
-  DI = ceiling_date(min(Date)) # Initial date
-  DF = ceiling_date(max(Date)) # Final date
-  NewDate = seq(
-    DI, DF, by = paste0(as.numeric(set_units(timescale, "min")), " min")
-  )
-  n = length(NewDate) # Number of intervals
-  NewQ = rep(0, length(NewDate)) # Initialize aggregation
-  Date = Date[!is.na(Q)]
-  Q = Q[!is.na(Q)]
-  k = length(Q) # Length of input data
-  ## Set initial counter
-  if (Date[1] == NewDate[1]) {
-    j = 2
-    NewQ[1] = Q[1]
-  } else {
-    j = 1
-  }
-  for (i in j:n) {
-    l = 0 # Interval data counter
-    ## Aggregate values
-    ## while j<=k && nd*Date(j)<=NewDate(i) % && nd*Date(j)>NewDate(i-1)
-    while (j <= k && Date[j] <= NewDate[i]) {
-      NewQ[i] = NewQ[i] + Q[j]
-      j = j+1
-      l = l+1
-    }
-    NewQ[i] = NewQ[i] / l
-  }
-  ## Fill gaps between data when there is only one value missing
-  for (i in 2:(n-1)) {
-    if (is.na(NewQ[i])) {
-      NewQ[i] = mean(c(NewQ[i-1], NewQ[i+1]))
-    }
-  }
-  ## Fill remaining gaps with zeros to calculate cumQ
-  NewQ[is.na(NewQ)] = 0
+  Q_units <- units(Q)
+  timescale_str <- paste0(as.numeric(set_units(timescale, "min")), " min")
+  DI = ceiling_date(min(Date), unit = timescale_str) # Initial date
+  DF = ceiling_date(max(Date), unit = timescale_str) # Final date
+  x <- tibble(Date = Date, Q = Q) %>%
+    mutate(Q = as.numeric(Q)) %>%
+    mutate(Date = ceiling_date(Date, unit = timescale_str)) %>%
+    group_by(Date) %>%
+    summarize(Q = mean(Q, na.rm = TRUE), Q_na = mean(Q)) %>%
+    mutate(Q = ifelse(is.na(Q_na), NA, Q)) %>%
+    dplyr::select(-Q_na)
+  x <- x %>% as_tsibble(index = Date, regular = TRUE)
+  x <- x %>% tsibble::fill_gaps(.start = DI, .end = DF)
+  x <- x %>% mutate(Q = zoo::na.approx(Q, maxgap = 1))
+  ## TODO not sure of the relevance of CumQ
+  ## x <- x %>% mutate(CumQ = cumsum(coalesce(Q, 0)) + Q * 0)
+  x <- x %>% mutate(Q = set_units(Q, Q_units, mode = "standard"))
+  x
+  ## NewDate = seq(
+  ##   DI, DF, by = paste0(as.numeric(set_units(timescale, "min")), " min")
+  ## )
 
-  ## PREPARE THE DATA VECTORS AT THE SPECIFIED SCALE
-  CumQ = cumsum(NewQ) # Initialize accumulation
-  VoidQ = NewQ
-  for (i in 1:length(Voids)) {
-    CumQ[NewDate > Voids[i,1] & NewDate < Voids[i,2]] = NA
-    NewQ[NewDate > Voids[i,1] & NewDate < Voids[i,2]] = NA
-  }
-  VoidQ[!is.na(NewQ)] = NA
-  ## Check initial and final values of Q for data existence
-  if (NewQ[1] == 0 & NewQ[2] != 0) {
-    VoidQ[1] = NewQ[1]
-    NewQ[1] = NA
-    CumQ[1] = NA
-  }
-  if (rev(NewQ)[1] == 0 && rev(NewQ)[2] != 0) {
-    VoidQ[length(VoidQ)] = rev(NewQ)[1]
-    NewQ[length(NewQ)] = NA
-    CumQ[length(CumQ)] = NA
-  }
-  ## MeanQ = mean(NewQ, na.rm = TRUE)
-  ## MaxQ = max(NewQ, na.rm = TRUE)
-  ## MinQ = min(NewQ, na.rm = TRUE)
-  tibble(Date = NewDate, Q = NewQ)
-  ## return(data.frame(NewDate, NewQ, CumQ, VoidQ))
+  ## ## x <- tibble(Date = NewDate) %>% left_join(tibble(Date = Date, Q = Q))
+
+  ## n = length(NewDate) # Number of intervals
+  ## NewQ = rep(0, length(NewDate)) # Initialize aggregation
+  ## NewQ = set_units(NewQ, units(Q), mode = "standard")
+  ## Date = Date[!is.na(Q)]
+  ## Q = Q[!is.na(Q)]
+  ## k = length(Q) # Length of input data
+  ## ## Set initial counter
+  ## if (Date[1] == NewDate[1]) {
+  ##   j = 2
+  ##   NewQ[1] = Q[1]
+  ## } else {
+  ##   j = 1
+  ## }
+  ## for (i in j:n) {
+  ##   l = 0 # Interval data counter
+  ##   ## Aggregate values
+  ##   ## while j<=k && nd*Date(j)<=NewDate(i) % && nd*Date(j)>NewDate(i-1)
+  ##   while (j <= k && Date[j] <= NewDate[i]) {
+  ##     NewQ[i] = NewQ[i] + Q[j]
+  ##     j = j+1
+  ##     l = l+1
+  ##   }
+  ##   NewQ[i] = NewQ[i] / l
+  ## }
+  ## ## Fill gaps between data when there is only one value missing
+  ## for (i in 2:(n-1)) {
+  ##   if (is.na(NewQ[i])) {
+  ##     NewQ[i] = mean(c(NewQ[i-1], NewQ[i+1]))
+  ##   }
+  ## }
+  ## ## Fill remaining gaps with zeros to calculate cumQ
+  ## NewQ[is.na(NewQ)] = 0
+
+  ## ## PREPARE THE DATA VECTORS AT THE SPECIFIED SCALE
+  ## CumQ = cumsum(NewQ) # Initialize accumulation
+  ## VoidQ = NewQ
+  ## for (i in 1:length(Voids)) {
+  ##   CumQ[NewDate > Voids[i,1] & NewDate < Voids[i,2]] = NA
+  ##   NewQ[NewDate > Voids[i,1] & NewDate < Voids[i,2]] = NA
+  ## }
+  ## VoidQ[!is.na(NewQ)] = NA
+  ## ## Check initial and final values of Q for data existence
+  ## if (NewQ[1] == 0 & NewQ[2] != 0) {
+  ##   VoidQ[1] = NewQ[1]
+  ##   NewQ[1] = NA
+  ##   CumQ[1] = NA
+  ## }
+  ## if (rev(NewQ)[1] == 0 && rev(NewQ)[2] != 0) {
+  ##   VoidQ[length(VoidQ)] = rev(NewQ)[1]
+  ##   NewQ[length(NewQ)] = NA
+  ##   CumQ[length(CumQ)] = NA
+  ## }
+  ## ## MeanQ = mean(NewQ, na.rm = TRUE)
+  ## ## MaxQ = max(NewQ, na.rm = TRUE)
+  ## ## MinQ = min(NewQ, na.rm = TRUE)
+  ## tibble(Date = NewDate, Q = NewQ)
+  ## ## return(data.frame(NewDate, NewQ, CumQ, VoidQ))
 }
 ## %% CHECK IF DATA ARE AT THE SAME TEMPORAL RESOLUTION
 ## scale1 = diff(datenum(Date1))*1440;

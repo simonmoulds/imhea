@@ -88,7 +88,7 @@ stream_gauge <- function(x,
   } else {
     x <- x %>% rename(H = level_column) %>% dplyr::select(Date, Q, H, Flag)
   }
-  x <- x %>% imhea_to_tsibble(date_column, ..., regular = TRUE)
+  x <- x %>% imhea_to_tsibble(date_column, ..., regular = FALSE)
   x <- x %>% mutate(Q = set_units(Q, discharge_units, mode = "standard"))
   if ("H" %in% names(x))
     x <- x %>% mutate(H = set_units(H, level_units, mode = "standard"))
@@ -221,19 +221,44 @@ if (nrg > 1) {
   P_HRes <- PrecHRes[[1]]$NewP
 }
 
+q1 <- average(q1$Date, q1$Q, timescale)
+
+x <- q1 %>% full_join(x_fill)
+
+x_daily <-
+  x %>%
+  as_tibble() %>%
+  mutate(Date = ceiling_date(Date, unit = "1 day")) %>%
+  group_by(Date) %>%
+  summarize(n = sum(is.na(Q)), Q = mean(Q), across(starts_with("Prec"), mean, na.rm = TRUE))
+
+x_hourly <-
+  x %>%
+  as_tibble() %>%
+  mutate(Date = ceiling_date(Date, unit = "1 hour")) %>%
+  group_by(Date) %>%
+  summarize(n = sum(is.na(Q)), Q = mean(Q), across(starts_with("Prec"), sum, na.rm = TRUE))
+
 stop()
 
-Date <- q1$Date
-Q <- q1$Q
-q1 <- average(q1$Date, q1$Q, int_HRes / 60)
+## Baseflow
 
-## TODO speed up identify_voids
 
-## https://stackoverflow.com/a/35162775
-x <- p1 # TODO remove Key
-x <- x %>% as_tibble()
-v <- x %>% identify_voids()
-## NOT USED
+## avg <- q1 %>% as_tibble() %>%
+##   dplyr::select(Date, Q) %>%
+##   mutate(NewDate = floor_date(Date, "5 mins")) %>%
+##   group_by(NewDate) %>%
+##   mutate(Q = as.numeric(Q)) %>%
+##   summarise(Q = mean(Q)) %>%
+##   rename(Date = NewDate)
+## complete_ts <- seq(avg$Date[1], rev(avg$Date)[1], by = "5 mins")
+## avg <- avg %>% as_tsibble(index = Date, regular = FALSE)
+
+## ## https://stackoverflow.com/a/35162775
+## x <- p1 # TODO remove Key
+## x <- x %>% as_tibble()
+## v <- x %>% identify_voids()
+## ## NOT USED
 
 ## x_aggr_matlab_input <-
 ##   read_csv("matlab_aggregate_events_input.csv", col_names = F) %>%

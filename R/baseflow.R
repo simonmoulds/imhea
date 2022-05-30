@@ -34,114 +34,143 @@ baseflow_uk <- function(Date, Q, ...) {
   ## % Created in February, 2018
   ## % Modified in February, 2018
 
-  Daycheck = 5 # Continuous days for recession [TODO - should be argument]
+  ## Fixed interval of width 5
+  int_width <- 5
+  n_ints <- ceiling(length(Q) / int_width)
+  ints <- rep(seq(1,n_ints), each=int_width)[1:length(Q)]
+  df <- tibble(int = ints, day = seq(1, length(ints)), Q = Q)
+  df <-
+    df %>%
+    group_by(int) %>%
+    summarize(Qmin = min(Q), n_int = sum(is.finite(int))) %>%
+    left_join(df, ., by="int") %>%
+    subset(n_int == int_width)
 
-  ## Average data at daily basis
-  daily_data = average(Date, Q, 1440)
-  DDate = daily_data$Date
-  DQ1 = daily_data$Q
-  ## Consider only periods when data exist
-  DQ = DQ1
-  DQ[is.na(DQ)] = Inf # Is this wise?
+  # extract minimum Qmin for each interval; these are
+  # candidates to become turning points
+  df_mins <- df[df$Q==df$Qmin, ] %>% na.omit()
 
-  ## Divide the time series into non-overlapping blocks of n days
-  DI = min(DDate) # Initial date
-  DF = max(DDate) # Final date
-  nDate = seq(DI, DF, by = paste0(Daycheck, " day"))
-  k = length(nDate)
-  nQmin = rep(NA, length(nDate))
+  # if there are two minima for an interval (e.g. two
+  # days with same Q), choose the earlier one
+  df_mins <- df_mins[!duplicated(df_mins$int), ]
 
-  ## Calculate the minima for each block
-  for (i in 2:k) {
-    nQmin[i] = min(DQ[DDate >= nDate[i-1] & DData < nDate[i]])
-  }
-  nQmin = nQmin[2:length(nQmin)]
-  nDate = nDate[2:length(nDate)]
+  ## determine turning points, defined as:
+  #    0.9*Qt < min(Qt-1, Qt+1)
+  # do this using a weighted rolling min function
+  df_mins$iQmin <- rollapply(
+    df_mins$Qmin,
+    width=3,
+    align="center",
+    fill=NA,
+    FUN=function(z) which.min(z*c(1,0.9,1))
+  )
+  df_mins <- subset(df_mins, is.finite(iQmin))  # get rid of first/last point
+  TP_day <- df_mins$day[df_mins$iQmin==2]
+  TP_Qmin <- df_mins$Qmin[df_mins$iQmin==2]
 
-  ## Determine the turning points of the baseflow line based on the minima
-  nBQ = nQmin
-  for (i in 2:(k-2)) {
-    if ((0.9 * nQmin[i] > nQmin[i-1]) | (0.9 * nQmin[i] > nQmin[i+1])) {
-      nBQ[i] = NA
+  if (length(TP_day>1)){
+
+    # linearly interpolate to length Q
+    bf <- rep(NaN, length(Q))
+    bf[TP_day] <- TP_Qmin
+    bf <- as.numeric(zoo::na.approx(bf, na.rm=F))
+
+    # need to fill in NAs?
+    if (endrule=="Q"){
+      bf[1:(TP_day[1]-1)] <- Q[1:(TP_day[1]-1)]
+      bf[(rev(TP_day)[1] + 1):length(Q)] <- Q[(rev(TP_day)[1] + 1):length(Q)]
+    } else if (endrule=="B") {
+      bf[1:(TP_day[1] - 1)] <- bf[TP_day[1]]
+      bf[(rev(TP_day)[1] + 1):length(Q)] <- bf[rev(TP_day)[1]]
+    } else if (endrule != "NA") {
+      stop("Invalid endrule")
     }
+
+  } else {
+    bf <- rep(0, length(Q))
   }
-  nDate = nDate[!is.na(nBQ)]
-  nBQ = nBQ[!is.na(nBQ)]
-  nBQ = head(nBQ, -1) # Remove last element
-  nDate = head(nDate, -1) # Remove last element
-  ## nBQ(end) = [];
-  ## nDate(end) = [];
 
-  ## TESTING [using MATLAB example https://uk.mathworks.com/help/matlab/ref/interp1.html]
-  ## x = c(1, 2, 3, 4, 5)
-  ## v = c(12, 16, 31, 10, 6)
-  ## xq = c(0, 0.5, 1.5, 5.5, 6)
-  ## library(Hmisc)
-  ## approxExtrap(x, v, xq, rule=2)
-  BQ = Hmisc::approxExtrap(nDate, nBQ, DDate, rule = 2)
-  BQ[BQ > DQ] = DQ[BQ > DQ]
-  BQ[is.na(DQ1)] = NA
-  SQ = DQ1 - BQ
+  # find any bf>Q and set to Q
+  i_tooHigh <- which(bf>Q)
+  bf[i_tooHigh] <- Q[i_tooHigh]
+  return(bf)
 
-  ## Calculate the recession constant
-  lim = 0.8 # Minimum R2 for linear fit
-  n = length(DDate)
-  R = rep(0, n)
-  M = rep(0, n)
-  LogBQ = log(BQ) # TODO check base is the same
+  ## Vb = nansum(BQ(DDate>=nDate(1) & DDate<=nDate(end)));
+  ## Va = nansum(DQ1(DDate>=nDate(1) & DDate<=nDate(end)));
+  ## BFI = Vb/Va;
 
-  ## h = waitbar(0,'Calculating recession constant...');
-  for (i in 1:n) {
-    Today = DDate[i]
-    X = DDate[DDate >= Today & DDate < (Today + Daycheck)]
-    Y = LogBQ[DDate >= Today & DDate < (Today + Daycheck)]
-    ## TODO - translate "[R(i),M(i)] = regression(X',Y');"
-    stop("Haven't implemented regression method")
-  }
-  R = R ** 2
-  M = (DDate[2] - DDate[1]) * M
-  DateTau = DDate[R >= lim & M < 0]
-  RTau = R[R >= lim & M < 0]
-  MTau = M[R >= lim & M < 0]
-  K = exp(MTau)
-  k = max(K)
+  ## ## OLD:
+  ## daycheck = 5 # Continuous days for recession [TODO - should be argument]
 
-  ## Calculate the baseflow index
-  Vb = sum(BQ[DDate >= nDate[1] & DDate <= rev(nDate)[1]])
-  Va = sum(DQ1[DDate >= nDate[1] & DDate <= rev(nDate)[1]])
-  BFI = Vb / Va
-  ## Rescale the data
-  ## Date = datetime(Date,'ConvertFrom','datenum');
-  ## DDate = datetime(DDate,'ConvertFrom','datenum');
-  ## %% PLOT THE RESULTS
-  ## if nargin >= 4
-  ##     LogQ = log(Q);
-  ##     DateTau = datetime(DateTau,'ConvertFrom','datenum');
-  ##     figure
-  ##     subplot(3,1,1)
-  ##     hold on
-  ##     plot(Date,Q,DDate,DQ,DDate,BQ,DDate,SQ)
-  ##     xlabel('Date')
-  ##     ylabel('Discharge [l/s]')
-  ##     legend('Discharge','Daily Discharge','Baseflow','Stormflow','Location','NorthWest')
-  ##     box on
-  ##     subplot(3,1,2)
-  ##     hold on
-  ##     plot(Date,LogQ,DDate,log(DQ),DDate,LogBQ)
-  ##     xlabel('Date')
-  ##     ylabel('Log(Discharge) log[l/s]')
-  ##     legend('Discharge','Daily Discharge','Baseflow','Location','NorthWest')
-  ##     box on
-  ##     subplot(3,1,3)
-  ##     plot(DDate(1:n),R,DDate(1:n),M,Date,LogQ,...
-  ##         DateTau,LogBQ(and(R>=lim,M<0)),'o',...
-  ##         DateTau,RTau,DateTau,MTau);
-  ##     legend('Coeff. R^2','Regression slope','Log Discharge',...
-  ##         'Identified linear','Behavioural R^2','Behavioural Slope',...
-  ##         'Location','NorthWest')
-  ##     box on
-  ## end
+  ## ## Average data at daily basis
+  ## daily_data = average(Date, Q, 1440)
+  ## DDate = daily_data$Date
+  ## DQ1 = daily_data$Q
+  ## ## Consider only periods when data exist
+  ## DQ = DQ1
+  ## DQ[is.na(DQ)] = Inf # Is this wise?
 
+  ## ## Divide the time series into non-overlapping blocks of n days
+  ## DI = min(DDate) # Initial date
+  ## DF = max(DDate) # Final date
+  ## nDate = seq(DI, DF, by = paste0(Daycheck, " day"))
+  ## k = length(nDate)
+  ## nQmin = rep(NA, length(nDate))
+
+  ## ## Calculate the minima for each block
+  ## for (i in 2:k) {
+  ##   nQmin[i] = min(DQ[DDate >= nDate[i-1] & DData < nDate[i]])
+  ## }
+  ## nQmin = nQmin[2:length(nQmin)]
+  ## nDate = nDate[2:length(nDate)]
+
+  ## ## Determine the turning points of the baseflow line based on the minima
+  ## nBQ = nQmin
+  ## for (i in 2:(k-2)) {
+  ##   if ((0.9 * nQmin[i] > nQmin[i-1]) | (0.9 * nQmin[i] > nQmin[i+1])) {
+  ##     nBQ[i] = NA
+  ##   }
+  ## }
+  ## nDate = nDate[!is.na(nBQ)]
+  ## nBQ = nBQ[!is.na(nBQ)]
+  ## nBQ = head(nBQ, -1) # Remove last element
+  ## nDate = head(nDate, -1) # Remove last element
+  ## ## nBQ(end) = [];
+  ## ## nDate(end) = [];
+
+  ## ## TESTING [using MATLAB example https://uk.mathworks.com/help/matlab/ref/interp1.html]
+  ## ## x = c(1, 2, 3, 4, 5)
+  ## ## v = c(12, 16, 31, 10, 6)
+  ## ## xq = c(0, 0.5, 1.5, 5.5, 6)
+  ## ## library(Hmisc)
+  ## ## approxExtrap(x, v, xq, rule=2)
+  ## BQ = Hmisc::approxExtrap(nDate, nBQ, DDate, rule = 2)
+  ## BQ[BQ > DQ] = DQ[BQ > DQ]
+  ## BQ[is.na(DQ1)] = NA
+  ## SQ = DQ1 - BQ
+
+  ## ## Calculate the recession constant
+  ## lim = 0.8 # Minimum R2 for linear fit
+  ## n = length(DDate)
+  ## R = rep(0, n)
+  ## M = rep(0, n)
+  ## LogBQ = log(BQ) # TODO check base is the same
+
+  ## ## h = waitbar(0,'Calculating recession constant...');
+  ## for (i in 1:n) {
+  ##   Today = DDate[i]
+  ##   X = DDate[DDate >= Today & DDate < (Today + Daycheck)]
+  ##   Y = LogBQ[DDate >= Today & DDate < (Today + Daycheck)]
+  ##   ## TODO - translate "[R(i),M(i)] = regression(X',Y');"
+  ##   stop("Haven't implemented regression method")
+  ## }
+  ## R = R ** 2
+  ## M = (DDate[2] - DDate[1]) * M
+  ## DateTau = DDate[R >= lim & M < 0]
+  ## RTau = R[R >= lim & M < 0]
+  ## MTau = M[R >= lim & M < 0]
+  ## K = exp(MTau)
+  ## k = max(K)
 }
 
 baseflow <- function(Date, Q) {
