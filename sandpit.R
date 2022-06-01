@@ -242,7 +242,14 @@ x_hourly <-
 stop()
 
 ## Baseflow
+Q = x_daily$Q
+Date = x_daily$Date
 
+## Indices input
+indices_date_input <- read_csv("inst/testdata/matlab_indices_date_input_llo_01.csv")
+indices_input <- read_csv("inst/testdata/matlab_indices_input_llo_01.csv")
+
+## Now we can develop indices scripts using these inputs
 
 ## avg <- q1 %>% as_tibble() %>%
 ##   dplyr::select(Date, Q) %>%
