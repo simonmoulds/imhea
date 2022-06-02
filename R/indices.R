@@ -251,47 +251,69 @@ indices <- function(Date, P, Q, A, ...) {
 ## fprintf('Process finished.\n')
 ## fprintf('\n')
 
+n_zero_p <- function(P, ...) {
+  ## Number of days per year without precipitation
+  ## FIXME this could be biased for short time periods
+  P <- P %>% na.omit()
+  k <- length(P)
+  ZeroP <- P[P == 0]
+  DayP0 <- floor(365 * length(ZeroP) / k)
+  DayP0
+}
+
 process_p <- function(Date, P, ...) {
-  ## %iMHEA Hydrological index calculation for Precipitation.
-  ## % [Indices] = iMHEA_ProcessP(Date,P,flag) calculates rainfall indices.
-  ## %
-  ## % Input:
-  ## % Date = dd/mm/yyyy hh:mm:ss [date format].
-  ## % P    = Precipitation [mm].
-  ## % flag = leave empty NOT to graph plots.
-  ## %
-  ## % Output:
-  ## % IndicesP = Vector with iMHEA's Hydrological Indices for Precipitation.
-  ## %            PYear = Annual precipitation [mm].
-  ## %            DayP0 = Number of days with zero precipitation per year [day].
-  ## %            PP0 = Percentage of days with zero precipitation per year [-].
-  ## %            PMDry = Precipitation of driest month [mm].
-  ## %            Sindx = Seasonality Index [-].
-  ## %            iM15m = Maximum precipitation intensity (15 min scale) [mm/h].
-  ## %            iM1hr = Maximum precipitation intensity (1 hour scale) [mm/h].
-  ## % PM   = Monthly precipitation [mm] per month number [Jan=1, Dec=12].
-  ## % IDC  = Maximum Intensity - Duration Curve [mm/h v time].
-  ## % CumP = Cumulative Precipitation [date v mm].
-  ## % DP   = Daily precipitation only when data exist [date v mm].
+  ## iMHEA Hydrological index calculation for Precipitation.
+  ##
+  ## Input:
+  ## Date = dd/mm/yyyy hh:mm:ss [date format].
+  ## P    = Precipitation [mm].
+  ##
+  ## Output:
+  ## IndicesP = Vector with iMHEA's Hydrological Indices for Precipitation.
+  ##            PYear = Annual precipitation [mm].
+  ##            DayP0 = Number of days with zero precipitation per year [day].
+  ##            PP0 = Percentage of days with zero precipitation per year [-].
+  ##            PMDry = Precipitation of driest month [mm].
+  ##            Sindx = Seasonality Index [-].
+  ##            iM15m = Maximum precipitation intensity (15 min scale) [mm/h].
+  ##            iM1hr = Maximum precipitation intensity (1 hour scale) [mm/h].
+  ## PM   = Monthly precipitation [mm] per month number [Jan=1, Dec=12].
+  ## IDC  = Maximum Intensity - Duration Curve [mm/h v time].
+  ## CumP = Cumulative Precipitation [date v mm].
+  ## DP   = Daily precipitation only when data exist [date v mm].
 
-  ## % Agregate data at daily basis.
-  ## [DDate,DP,DCumP] = iMHEA_Aggregation(Date,P,1440);
-  aggregation(Date, P, 1440) # TODO what should aggregation(...) return?
-  ## CumP = [datenum(DDate),DCumP];
+  voids = identify_voids(tibble(Date = Date, Event = P))
+  x <- tibble(Date = Date, P = P) %>%
+    mutate(Date = ceiling_date(Date, unit = "1 day")) %>%
+    group_by(Date) %>%
+    summarize(P = sum(P, na.rm = TRUE)) %>%
+    mutate(CumP = cumsum(P))
+  for (i in 1:nrow(voids)) {
+    idx <- x$Date > voids[i,1] & x$Date < voids[i,2]
+    x[idx,] = NA
+  }
+  x <- x %>% na.omit()
 
-  ## Consider periods only when data exists
-  NewDate = DDate[!is.na(DDate)]
-  NewP = DP[!is.na(DP)]
-  k = length(NewP)
-  ## DP = [datenum(NewDate),NewP];
+  ## ## Agregate data at daily basis.
+  ## x <- aggregation(Date, P, set_units(1440, "min"))
+  ## x <- x %>% na.omit()
 
-  ## % Number of Days with zero precipitation.
-  ZeroP = NewP[NewP == 0]
-  DayP0 = floor(365 * length(ZeroP) / k)
-  PP0 = DayP0 / 365
+  ## Number of days with zero precipitation
+  DayP0 <- n_zero_p(x$P)
+  PP0 <- DayP0 / 365
+  PM <- x %>%
+    mutate(Date = floor_date(Date, unit = "1 month")) %>%
+    group_by(Date) %>%
+    summarize(P = sum(P)) %>%
+    mutate(Month = month(Date)) %>%
+    group_by(Month) %>%
+    summarize(P = mean(P))
 
-  ## Annual and monthly aggregated data
-  PM = monthly_rain(Date[!is.na(P)], P[!is.na(P)]) # TODO
+  PMDry <- PM$P %>% min()
+  PYear <- sum(PM$P)
+  if (is.na(PYear))
+    PYear <- 365 * mean(x$P)
+  SI <- (1 / PYear) * (sum(abs(PM - PYear / 12))) * 6 / 11
 
   ## Precipitation in the driest month
   PMDry = min(PM)
@@ -303,18 +325,62 @@ process_p <- function(Date, P, ...) {
   SI = (1 / PYear) * (sum(abs(PM - PYear / 12))) * 6 / 11
 
   ## Maximum intensity duration curve
-  idc = idc(Date, P) # TODO
+  idc = idc_fun(Date, P) # TODO
+  iM15m = idc[idc$D == 15, 2] %>% as.numeric()
+  iM1hr = idc[idc$D == 60, 2] %>% as.numeric()
 
-  indices = list(PYear, DayP0, PP0, PMDry, SINDX, iM15m, iM1hr)
-  indices
-  ## % Hydrological indices for precipitation.
-  ## IndicesP = [PYear;...
-  ##            DayP0;...
-  ##            PP0;...
-  ##            PMDry;...
-  ##            SINDX;...
-  ##            iM15m;...
-  ##            iM1hr];
+  indicesP = list(PYear = PYear,
+                  DayP0 = DayP0,
+                  PP0 = PP0,
+                  PMDry = PMDry,
+                  SI = SI,
+                  iM15m = iM15m,
+                  iM1hr = iM1hr)
+  indicesP
+}
+
+idc_fun <- function(Date, P, ...) {
+  ## function [IDC,iM15m,iM1hr] = iMHEA_IDC(Date,P,varargin)
+  ## iMHEA Calculation of Maximum Intensity-Duration Curve.
+  ##
+  ## Input:
+  ## Date = dd/mm/yyyy hh:mm:ss [date format].
+  ## P    = Precipitation [mm].
+  ## flag = leave empty NOT to graph plots.
+  ##
+  ## Output:
+  ## IDC   = Maximum Intensity - Duration Curve [mm/h v time].
+  ## iM15m = Maximum precipitation intensity (15 min scale) [mm/h].
+  ## iM1hr = Maximum precipitation intensity (1 hour scale) [mm/h].
+  scale <- median(diff(Date)) %>% as.numeric(units = "mins")
+  ## TODO aggregate to 5 minute intervals if needed
+  stopifnot(scale == 5) # FIXME
+  P[is.na(P)] <- 0
+  k1 <- length(P)
+  D <- c(1, 2, 3, 6, 12, 24, 48, 144, 288, 576)
+  u <- rep(0, k1)
+  IDC <- tibble(D = D * 5, Intensity = 0)
+  ## Maximum intensities
+  for (i in 1:length(D)) {
+    u[1] <- sum(P[1:D[i]]) # Sum of first i elements
+    ## Sum i elements using a moving window
+    for (j in 2:(k1 - D[i] + 1)) {
+      u[j] = u[j-1] + P[j + D[i] - 1] - P[j-1]
+    }
+    IDC[i,2] = max(u, na.rm = TRUE) * 12 / D[i]
+    ## IDC[i,3] = mean(u[u>1e-12], na.rm = TRUE) * 12 / D[i]
+    ## IDC[i,4] = median(u[u>1e-12], na.rm = TRUE) * 12 / D[i]
+  }
+  IDC
+  ## %% PLOT RESULTS
+  ## if nargin >= 3
+  ##     figure
+  ##     semilogx(IDC(:,1),IDC(:,2))
+  ##     xlabel('Duration (min)')
+  ##     ylabel('Maximum precipitation intensity (mm/h)')
+  ##     title('Maximum Intensity-Duration Curve')
+  ##     hold on
+  ## end
 }
 
 process_q <- function(Date, Q, A = NA, normalize = FALSE, ...) {
@@ -610,65 +676,65 @@ monthly_rain <- function(Date, P) {
 ##     drawnow
 ## end
 
-idc <- function(Date, P) {
-  ## %iMHEA Calculation of Maximum Intensity-Duration Curve.
-  ## % [IDC,iM15m,iM1hr] = iMHEA_IDC(Date,P,flag).
-  ## %
-  ## % Input:
-  ## % Date = dd/mm/yyyy hh:mm:ss [date format].
-  ## % P    = Precipitation [mm].
-  ## % flag = leave empty NOT to graph plots.
-  ## %
-  ## % Output:
-  ## % IDC   = Maximum Intensity - Duration Curve [mm/h v time].
-  ## % iM15m = Maximum precipitation intensity (15 min scale) [mm/h].
-  ## % iM1hr = Maximum precipitation intensity (1 hour scale) [mm/h].
-  ## %
-  ## % Boris Ochoa Tocachi
-  ## % Imperial College London
-  ## % Created in July, 2015
-  ## % Last edited in November, 2017
+## idc <- function(Date, P) {
+##   ## %iMHEA Calculation of Maximum Intensity-Duration Curve.
+##   ## % [IDC,iM15m,iM1hr] = iMHEA_IDC(Date,P,flag).
+##   ## %
+##   ## % Input:
+##   ## % Date = dd/mm/yyyy hh:mm:ss [date format].
+##   ## % P    = Precipitation [mm].
+##   ## % flag = leave empty NOT to graph plots.
+##   ## %
+##   ## % Output:
+##   ## % IDC   = Maximum Intensity - Duration Curve [mm/h v time].
+##   ## % iM15m = Maximum precipitation intensity (15 min scale) [mm/h].
+##   ## % iM1hr = Maximum precipitation intensity (1 hour scale) [mm/h].
+##   ## %
+##   ## % Boris Ochoa Tocachi
+##   ## % Imperial College London
+##   ## % Created in July, 2015
+##   ## % Last edited in November, 2017
 
-  ## % Maximum Intensity - Duration Curve.
-  ## h = waitbar(0,'Calculating IDC...');
-  ## % Consider periods only when data exists.
-  VP = P
-  ## Check if the measurements have 5 min interval
-  if (round(median(diff(Date))) != 300) {
-    ## Consider periods only when data exists
-    VDate = Date[!is.na(VP)]
-    VP = VP[!is.na(VP)]
-    VDate = VDate[!VP == 0]
-    VP = VP[!VP == 0]
-    ## Aggregate data to 5 min interval [iMHEA standard?]
-    ## [~,VP] = iMHEA_Aggregation(VDate,VP,5);
-    aggregation(VDate, VP, 5) # TODO 5 mins
-  } else {
-    ## % Consider periods only when data exists.
-    VP[is.na(VP)] = 0
-  }
-  k1 = length(VP)
-  ## % Durations: 5, 10, 15, 30, 60 min; 2, 4, 12, 24 hours; 2 days.
-  D = c(1, 2, 3, 6, 12, 24, 48, 144, 288, 576)
-  u = rep(0, k1)
-  IDC = matrix(data = 0, nrow = length(D), ncol = 2)
-  IDC[,1] = D * 5 # TODO
-  ## Maximum intensities
-  for (i in 1:length(D)) {
-    ## % Define initial IntP(1).
-    u[1] = sum(VP[1:D[i]]) # The sum of the first i elements
-    ## Sums i elements using a moving window
-    for (j in 2:(k1 - D[i] + 1)) {
-      u[j] = u[j-1] + VP[j + D[i] - 1] - VP[j-1]
-    }
-    IDC[i, 2] = max(u) * 12 / D[i]
-    IDC[i, 3] = mean(u[u > 1e-12]) * 12 / D[i]
-    IDC[i, 4] = median(u[u > 1e-12]) * 12 / D[i]
-    ## IDC(i,4) = median(u(u>1E-12),'omitnan')*12/D(i);
-  }
+##   ## % Maximum Intensity - Duration Curve.
+##   ## h = waitbar(0,'Calculating IDC...');
+##   ## % Consider periods only when data exists.
+##   VP = P
+##   ## Check if the measurements have 5 min interval
+##   if (round(median(diff(Date))) != 300) {
+##     ## Consider periods only when data exists
+##     VDate = Date[!is.na(VP)]
+##     VP = VP[!is.na(VP)]
+##     VDate = VDate[!VP == 0]
+##     VP = VP[!VP == 0]
+##     ## Aggregate data to 5 min interval [iMHEA standard?]
+##     ## [~,VP] = iMHEA_Aggregation(VDate,VP,5);
+##     aggregation(VDate, VP, 5) # TODO 5 mins
+##   } else {
+##     ## % Consider periods only when data exists.
+##     VP[is.na(VP)] = 0
+##   }
+##   k1 = length(VP)
+##   ## % Durations: 5, 10, 15, 30, 60 min; 2, 4, 12, 24 hours; 2 days.
+##   D = c(1, 2, 3, 6, 12, 24, 48, 144, 288, 576)
+##   u = rep(0, k1)
+##   IDC = matrix(data = 0, nrow = length(D), ncol = 2)
+##   IDC[,1] = D * 5 # TODO
+##   ## Maximum intensities
+##   for (i in 1:length(D)) {
+##     ## % Define initial IntP(1).
+##     u[1] = sum(VP[1:D[i]]) # The sum of the first i elements
+##     ## Sums i elements using a moving window
+##     for (j in 2:(k1 - D[i] + 1)) {
+##       u[j] = u[j-1] + VP[j + D[i] - 1] - VP[j-1]
+##     }
+##     IDC[i, 2] = max(u) * 12 / D[i]
+##     IDC[i, 3] = mean(u[u > 1e-12]) * 12 / D[i]
+##     IDC[i, 4] = median(u[u > 1e-12]) * 12 / D[i]
+##     ## IDC(i,4) = median(u(u>1E-12),'omitnan')*12/D(i);
+##   }
 
-  ## % Intensity indices.
-  iM15m = IDC[D == 3, 2]  # 5 * 3 = 15 min
-  iM1hr = IDC[D == 12, 2] # 5 * 12 = 60 min = 1h
-  ## TODO plots
-}
+##   ## % Intensity indices.
+##   iM15m = IDC[D == 3, 2]  # 5 * 3 = 15 min
+##   iM1hr = IDC[D == 12, 2] # 5 * 12 = 60 min = 1h
+##   ## TODO plots
+## }

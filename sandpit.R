@@ -249,8 +249,125 @@ Date = x_daily$Date
 indices_date_input <- read_csv("inst/testdata/matlab_indices_date_input_llo_01.csv")
 indices_input <- read_csv("inst/testdata/matlab_indices_input_llo_01.csv")
 
+Date <- indices_date_input[,1,drop=T] %>% as.POSIXct(format = "%d-%b-%Y %H:%M:%S", tz = "Etc/GMT-5")
+P <- indices_input[,2,drop=T] %>% as.numeric()
+Q <- indices_input[,3,drop=T] %>% as.numeric()
+A <- iMHEA_Catchment_AREA[1,2] %>% as.numeric() # km2
+
 ## Now we can develop indices scripts using these inputs
 
+## [IndicesP,~,~,IndicesQ,~,~,QYEAR,RRa,RRm,RRl] = iMHEA_Indices(Date,P,Q,A,1);
+## % Calculate indices from Olden & Poff (2003).
+## [M,F,D,T,R] = iMHEA_IndicesPlus(Date,Q,A,1);
+## % Calculate Precipitation climatic indices.
+## [ClimateP] = iMHEA_ClimateP(Date,P,1);
+
+## % Calculate indices for Discharge and Precipitation.
+## if nargin >= 5
+##     [IndicesP,PM,IDC,CumP,DP] = iMHEA_ProcessP(Date,P,1);
+##     [IndicesQ,QM,FDC,CumQ,DQ] = iMHEA_ProcessQ(Date,Q,A,1,1);
+## else
+##     [IndicesP,PM,IDC,CumP,DP] = iMHEA_ProcessP(Date,P);
+##     [IndicesQ,QM,FDC,CumQ,DQ] = iMHEA_ProcessQ(Date,Q,A);
+## end
+
+## % Runoff Coefficient.
+## QYEAR = IndicesQ(8)*365/1000000*86400;
+## RRa = QYEAR / IndicesP(1);
+## CumQ(:,2) = CumQ(:,2)/1000000*86400;
+
+## if isnan(QYEAR); QYEAR = nanmean(DQ(:,2))/1000000*86400; end
+## RRl = nanmean(DQ(:,2))/1000000*86400 / (nanmean(DP(:,2)));
+
+## % Monthly discharge in mm.
+## MDays = [31 28 31 30 31 30 31 31 30 31 30 31]';
+## QM = QM.*MDays/1000000*86400;
+## RRm = nansum(QM)/nansum(PM);
+
+## if nargin >= 5
+##     % Transform dates to date format for plots
+##     CumPDate = datetime(CumP(:,1),'ConvertFrom','datenum');
+##     CumQDate = datetime(CumQ(:,1),'ConvertFrom','datenum');
+##     NewDateP = datetime(DP(:,1),'ConvertFrom','datenum');
+##     NewDateQ = datetime(DQ(:,1),'ConvertFrom','datenum');
+
+##     figure
+##     subplot(2,1,1)
+##     bar(Date,P)
+##     xlabel('Date')
+##     ylabel('Precipitation (mm)')
+##     set(gca,'YDir','reverse')
+##     Xlim = get(gca,'XLim');
+##     title('Input Precipitation')
+##     box on
+
+##     subplot(2,1,2)
+##     plot(Date,Q/A)
+##     xlabel('Date')
+##     ylabel('Discharge (l/s/km2)')
+##     title('Input Discharge')
+##     box on
+
+##     figure
+##     subplot(2,1,1)
+##     plot(CumPDate,CumP(:,2),CumQDate,CumQ(:,2))
+##     title('Cumulative comparison')
+##     legend('Cum. Rainfall (mm)','Cum. Discharge(mm)','Location','NorthWest')
+##     xlabel('Date')
+##     ylabel('Cumulative variables')
+##     box on
+
+##     subplot(2,1,2)
+##     plot(CumP(:,2),CumQ(:,2))
+##     title('Double Mass Plot')
+##     xlabel('Precipitation')
+##     ylabel('Discharge')
+##     box on
+
+##     figure
+##     semilogx(IDC(:,1),IDC(:,2))
+##     xlabel('Duration (min)')
+##     ylabel('Maximum precipitation intensity (mm/h)')
+##     title('Maximum Intensity-Duration Curve')
+##     box on
+
+##     figure
+##     semilogy(FDC(:,1),FDC(:,2))
+##     xlabel('Exceedance probability')
+##     ylabel('Discharge (l/s/km2)')
+##     title('Flow Duration Curve')
+##     box on
+
+##     figure
+##     plot((1:12)',PM,(1:12)',QM)
+##     xlabel('Month')
+##     ylabel('Variable (mm)')
+##     legend('Precipitation (mm)','Discharge (mm)')
+##     title('Monthly Data')
+##     xlim([0 13])
+##     box on
+
+##     figure
+##     subplot(2,1,1)
+##     bar(NewDateP,DP(:,2))
+##     xlabel('Date')
+##     ylabel('Precipitation (mm)')
+##     set(gca,'YDir','reverse','XLim',Xlim);
+##     title('Daily Precipitation')
+##     box on
+
+##     subplot(2,1,2)
+##     plot(NewDateQ,DQ(:,2),NewDateQ,DQ(:,3),NewDateQ,DQ(:,4))
+##     xlabel('Date')
+##     ylabel('Discharge (l/s/km2)')
+##     legend('Discharge','Baseflow','Stormflow')
+##     set(gca,'XLim',Xlim);
+##     title('Daily Discharge')
+##     box on
+## end
+
+## NOT USED:
+##
 ## avg <- q1 %>% as_tibble() %>%
 ##   dplyr::select(Date, Q) %>%
 ##   mutate(NewDate = floor_date(Date, "5 mins")) %>%

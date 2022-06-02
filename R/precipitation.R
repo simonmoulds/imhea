@@ -206,84 +206,84 @@ intCorrection <- function(r1m, y, Lowint, halves, x, x1m) {
   ## list(r2m = r2m, y2m = y2m$y, biased = biased, bEvent = bEvent)
 }
 
-aggregation <- function(Date, P, Scale, flag) {
-  ## %iMHEA Agregation of rainfall (agregation within an interval).
-  ## % [NewDate,NewP,CumP,VoidP,MaxP] = iMHEA_Aggregation(Date,P,scale,flag)
-  ## % aggregates precipitation data using tipping bucket counting.
-  ## %
-  ## % Input:
-  ## % Date  = dd/mm/yyyy hh:mm:ss [date format].
-  ## % P     = Precipitation [mm].
-  ## % scale = Agregation interval [min].
-  ## % flag  = leave empty NOT to run the data voids assessment and plots.
-  ## %
-  ## % Output:
-  ## % NewDate   = dd/mm/yyyy hh:mm:ss [date format] at specified interval.
-  ## % NewP      = Agregated Precipitation [mm].
-  ## % CumP      = Cumulative rainfall [mm].
-  ## % VoidP     = Void intervals [mm].
-  ## % MaxP      = Maximum intensity for specified interval [mm].
+## aggregation <- function(Date, P, Scale, flag) {
+##   ## %iMHEA Agregation of rainfall (agregation within an interval).
+##   ## % [NewDate,NewP,CumP,VoidP,MaxP] = iMHEA_Aggregation(Date,P,scale,flag)
+##   ## % aggregates precipitation data using tipping bucket counting.
+##   ## %
+##   ## % Input:
+##   ## % Date  = dd/mm/yyyy hh:mm:ss [date format].
+##   ## % P     = Precipitation [mm].
+##   ## % scale = Agregation interval [min].
+##   ## % flag  = leave empty NOT to run the data voids assessment and plots.
+##   ## %
+##   ## % Output:
+##   ## % NewDate   = dd/mm/yyyy hh:mm:ss [date format] at specified interval.
+##   ## % NewP      = Agregated Precipitation [mm].
+##   ## % CumP      = Cumulative rainfall [mm].
+##   ## % VoidP     = Void intervals [mm].
+##   ## % MaxP      = Maximum intensity for specified interval [mm].
 
-  ## % Move date by 0.25 seconds to avoid numerical errors.
-  Date = Event - seconds(0.25)
-  Voids = identify_voids(Date, P)
-  P[is.na(P)] = 0
-  ## % Transform date variables for easier processing.
-  ## Date = datenum(Date);
+##   ## % Move date by 0.25 seconds to avoid numerical errors.
+##   Date = Event - seconds(0.25)
+##   Voids = identify_voids(Date, P)
+##   P[is.na(P)] = 0
+##   ## % Transform date variables for easier processing.
+##   ## Date = datenum(Date);
 
-  ## %% AGGREGATION
-  nd = 1440 / scale
-  DI = ceiling_date(min(Date)) # Initial date
-  DF = ceiling_date(max(Date)) # Final date
-  NewDate = seq(DI, DF, by = "1 min")
-  n = length(NewDate) # Number of intervals
-  NewP = rep(0, length(NewDate)) # Initialize aggregation
-  ## Delete zero events
-  indx = (P == 0)
-  Date = Date[P > 0]
-  P = P[P > 0]
-  k = length(P)
+##   ## %% AGGREGATION
+##   nd = 1440 / scale
+##   DI = ceiling_date(min(Date)) # Initial date
+##   DF = ceiling_date(max(Date)) # Final date
+##   NewDate = seq(DI, DF, by = "1 min")
+##   n = length(NewDate) # Number of intervals
+##   NewP = rep(0, length(NewDate)) # Initialize aggregation
+##   ## Delete zero events
+##   indx = (P == 0)
+##   Date = Date[P > 0]
+##   P = P[P > 0]
+##   k = length(P)
 
-  ## if nd*(Date(1)) == NewDate(1)
-  if (Date[1] == NewDate[1]) {
-    j = 2 # Data counter
-    NewP[1] = P[1]
-  } else {
-    j = 1 # Data counter
-  }
+##   ## if nd*(Date(1)) == NewDate(1)
+##   if (Date[1] == NewDate[1]) {
+##     j = 2 # Data counter
+##     NewP[1] = P[1]
+##   } else {
+##     j = 1 # Data counter
+##   }
 
-  for (i in j:n) {
-    ## Aggregate values
-    while (j <= k & Date[j] <= NewDate[i]) {
-      NewP[i] = NewP[i] + P[j]
-      j = j + 1
-    }
-  }
+##   for (i in j:n) {
+##     ## Aggregate values
+##     while (j <= k & Date[j] <= NewDate[i]) {
+##       NewP[i] = NewP[i] + P[j]
+##       j = j + 1
+##     }
+##   }
 
-  ## Fill gaps between data when there is only one value missing
-  for (i in 2:(n-1)) {
-    if (is.na(NewP[i])) {
-      NewP[i] = 0 # FIXME
-    }
-  }
+##   ## Fill gaps between data when there is only one value missing
+##   for (i in 2:(n-1)) {
+##     if (is.na(NewP[i])) {
+##       NewP[i] = 0 # FIXME
+##     }
+##   }
 
-  ## %% PREPARE THE DATA VECTORS AT THE SPECIFIED SCALE
-  CumP = cumsum(NewP) # Initialize accumulation
-  ## NewDate = datetime(NewDate/nd,'ConvertFrom','datenum'); % Rescale the date
-  ## Date = datetime(Date,'ConvertFrom','datenum'); % Restore the original date
-  ## Return data gaps to aggregated vectors
-  VoidP = NewP
-  for (i in 1:length(Voids)) {
-    CumP[NewDate > Voids[i,1] & NewDate < Voids[i,2]] = NA
-    NewP[NewDate > Voids[i,1] & NewDate < Voids[i,2]] = NA
-  }
-  VoidP[!is.na(NewP)] = NA
-  ## Correct the last row
-  if (rev(NewP)[1] == 0 & is.na(rev(NewP)[2])) {
-    VoidP[length(VoidP)] = rev(NewP)[1]
-    NewP[length(NewP)] = NA
-    CumP[length(CumP)] = NA
-  }
-  MaxP = max(NewP, na.rm = TRUE) # Maximum intensity
-  return(data.frame(NewDate, NewP, CumP, VoidP))
-}
+##   ## %% PREPARE THE DATA VECTORS AT THE SPECIFIED SCALE
+##   CumP = cumsum(NewP) # Initialize accumulation
+##   ## NewDate = datetime(NewDate/nd,'ConvertFrom','datenum'); % Rescale the date
+##   ## Date = datetime(Date,'ConvertFrom','datenum'); % Restore the original date
+##   ## Return data gaps to aggregated vectors
+##   VoidP = NewP
+##   for (i in 1:length(Voids)) {
+##     CumP[NewDate > Voids[i,1] & NewDate < Voids[i,2]] = NA
+##     NewP[NewDate > Voids[i,1] & NewDate < Voids[i,2]] = NA
+##   }
+##   VoidP[!is.na(NewP)] = NA
+##   ## Correct the last row
+##   if (rev(NewP)[1] == 0 & is.na(rev(NewP)[2])) {
+##     VoidP[length(VoidP)] = rev(NewP)[1]
+##     NewP[length(NewP)] = NA
+##     CumP[length(CumP)] = NA
+##   }
+##   MaxP = max(NewP, na.rm = TRUE) # Maximum intensity
+##   return(data.frame(NewDate, NewP, CumP, VoidP))
+## }

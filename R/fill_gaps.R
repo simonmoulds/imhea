@@ -168,7 +168,7 @@ aggregation <- function(Date, P, timescale, ...) {
     CumP[length(NewP)] <- NA
   }
   ## MaxP <- max(NewP, na.rm = TRUE) # Maximum intensity
-  tibble(Date = NewDate, Prec = NewP)
+  tibble(Date = NewDate, Prec = NewP, CumP = CumP)
 }
 
 average <- function(Date, Q, timescale) {
