@@ -384,112 +384,117 @@ idc_fun <- function(Date, P, ...) {
 }
 
 process_q <- function(Date, Q, A = NA, normalize = FALSE, ...) {
-  ## %iMHEA Hydrological index calculation for Discharge.
-  ## % [Indices] = iMHEA_ProcessQ(Date,Q,A,flags) calculates streamflow indices.
-  ## %
-  ## % Input:
-  ## % Date = dd/mm/yyyy hh:mm:ss [date format].
-  ## % Q = Discharge [l/s].
-  ## % A = Catchment area [km2] (Optional).
-  ## % flag1 = leave empty NOT to graph discharge plots.
-  ## % flag2 = leave empty NOT to graph baseflow plots.
-  ## %
-  ## % Output: [l/s/km2 if Area was input, or l/s otherwise].
-  ## % IndicesQ = Vector with iMHEA's Hydrological Indices for Discharge.
-  ## %           Low flows:
-  ## %               QDMin = Minimum daily flow [l/s].
-  ## %               Q95   = 05th percentile [l/s].
-  ## %               DayQ0 = Days with zero flow per year [-].
-  ## %               PQ0   = Proportion of days with zero flow per year [-].
-  ## %               QMDry = Mean daily flow of driest month [l/s].
-  ## %           High flows:
-  ## %               QDMax = Maximum Daily flow [l/s].
-  ## %               Q10   = 90th percentile [l/s].
-  ## %           Mean flows:
-  ## %               QDMY  = Annual Mean Daily flow [l/s].
-  ## %               QDML  = Long-term Mean Daily flow [l/s].
-  ## %               Q50   = 50th percentile [l/s].
-  ## %           Regulation:
-  ## %               BFI1   = Baseflow index from UK handbook [-].
-  ## %               k1     = Recession constant from UK handbook [-].
-  ## %               BFI2   = Baseflow index 2-parameter algorithm [-].
-  ## %               k2     = Recession constant 2-parameter algorithm [-].
-  ## %               Range = Discharge range [-] Qmax/Qmin.
-  ## %               R2FDC = Slope of the FDC between 33%-66% / Mean flow [-].
-  ## %               IRH   = Hydrological Regulation Index [-].
-  ## %               RBI1  = Richards-Baker annual flashiness index [-].
-  ## %               RBI2  = Richards-Baker seasonal flashiness index [-].
-  ## %               DRYQMEAN = Min monthly flow / Mean monthly flow [-].
-  ## %               DRYQWET  = Min monthly flow / Max monthly flow [-].
-  ## %               SINDQ = Seasonality Index in flows [-].
-  ## % QM = Monthly Mean Daily flow (l/s) per month number [Jan=1, Dec=12].
-  ## % FDC  = Flow Duration Curve [l/s v %].
-  ## % CumQ = Date and Cumulative Discharge [l/s].
-  ## % DQ   = Daily Discharge only when data exist [date v l/s], including:
-  ## %        BQ: Baseflow [l/s].
-  ## %        SQ: Stormflow [l/s].
+  ## [Indices] = iMHEA_ProcessQ(Date,Q,A,flags) calculates streamflow indices.
+  ##
+  ## Input:
+  ## Date = dd/mm/yyyy hh:mm:ss [date format].
+  ## Q = Discharge [l/s].
+  ## A = Catchment area [km2] (Optional).
+  ## flag1 = leave empty NOT to graph discharge plots.
+  ## flag2 = leave empty NOT to graph baseflow plots.
+  ##
+  ## Output: [l/s/km2 if Area was input, or l/s otherwise].
+  ## IndicesQ = Vector with iMHEA's Hydrological Indices for Discharge.
+  ##           Low flows:
+  ##               QDMin = Minimum daily flow [l/s].
+  ##               Q95   = 05th percentile [l/s].
+  ##               DayQ0 = Days with zero flow per year [-].
+  ##               PQ0   = Proportion of days with zero flow per year [-].
+  ##               QMDry = Mean daily flow of driest month [l/s].
+  ##           High flows:
+  ##               QDMax = Maximum Daily flow [l/s].
+  ##               Q10   = 90th percentile [l/s].
+  ##           Mean flows:
+  ##               QDMY  = Annual Mean Daily flow [l/s].
+  ##               QDML  = Long-term Mean Daily flow [l/s].
+  ##               Q50   = 50th percentile [l/s].
+  ##           Regulation:
+  ##               BFI1   = Baseflow index from UK handbook [-].
+  ##               k1     = Recession constant from UK handbook [-].
+  ##               BFI2   = Baseflow index 2-parameter algorithm [-].
+  ##               k2     = Recession constant 2-parameter algorithm [-].
+  ##               Range = Discharge range [-] Qmax/Qmin.
+  ##               R2FDC = Slope of the FDC between 33%-66% / Mean flow [-].
+  ##               IRH   = Hydrological Regulation Index [-].
+  ##               RBI1  = Richards-Baker annual flashiness index [-].
+  ##               RBI2  = Richards-Baker seasonal flashiness index [-].
+  ##               DRYQMEAN = Min monthly flow / Mean monthly flow [-].
+  ##               DRYQWET  = Min monthly flow / Max monthly flow [-].
+  ##               SINDQ = Seasonality Index in flows [-].
+  ## QM = Monthly Mean Daily flow (l/s) per month number [Jan=1, Dec=12].
+  ## FDC  = Flow Duration Curve [l/s v %].
+  ## CumQ = Date and Cumulative Discharge [l/s].
+  ## DQ   = Daily Discharge only when data exist [date v l/s], including:
+  ##        BQ: Baseflow [l/s].
+  ##        SQ: Stormflow [l/s].
 
-  ## %% PROCESS
+  stopifnot(normalize & is.na(A))
+  if (normalize)
+    Q <- Q / A
 
-  ## % Normalize discharge.
-  if (normalize) {
-    if (is.na(A)) {
-      stop("`A` must be provided if `normalize` is TRUE")
-    } else {
-      Q = Q / A
-    }
+  ## Average data at daily basis.
+  voids = identify_voids(tibble(Date = Date, Event = Q))
+  x <- tibble(Date = Date, Q = Q) %>%
+    mutate(Date = ceiling_date(Date, unit = "1 day")) %>%
+    group_by(Date) %>%
+    summarize(Q = sum(Q, na.rm = TRUE)) %>%
+    mutate(CumQ = cumsum(Q))
+  for (i in 1:nrow(voids)) {
+    idx <- which(x$Date > voids[i,1] & x$Date < voids[i,2])
+    x[idx,] = NA
   }
-  ## TODO
+  x <- x %>% na.omit()
 
-  ## % Average data at daily basis.
-  average(Date, Q, 1440)
-  RANGE = QDMax / QDMin
-  ## CumQ = [datenum(DDate),DCumQ];
-
-  ## % Consider periods only when data exists.
-  NewDate = DDate[!is.na(DQ)]
-  NewQ = DQ[!is.na(DQ)]
-  l = length(NewQ)
-
-  ## Number of days with zero flow
-  ZeroQ = NewQ[NewQ == 0]
-  DayQ0 = floor(365 * length(ZeroQ) / l)
-  PQ0 = DayQ0 / 365
-
-  ## Annual and monthly average data
-  ## TODO
-  monthly_flow(Date[!is.na(Q)], Q[!is.na(Q)])
-  QMDry = min(QM)
-  ## Annual average flow as mean monthly flow
-  if (is.na(QDMY)) QDMY = mean(QM)
-  ## Annual average flow as mean daily flow
-  if (is.na(QDMY)) QDMY = mean(NewQ)
-
-  ## Monthly discharge indices
-  DRYQMEAN = QMDry / mean(QM)
-  DRYQMET = QMDry / max(QM)
+  ZeroQ <- x$Q[x$Q == 0]
+  DayQ0 <- floor(365 * length(ZeroQ) / nrow(x))
+  PQ0 <- DayQ0 / 365
+  QM <- x %>%
+    mutate(Date = floor_date(Date, unit = "1 month")) %>%
+    group_by(Date) %>%
+    summarize(Q = mean(Q)) %>%
+    mutate(Month = month(Date)) %>%
+    group_by(Month) %>%
+    summarize(Q = mean(Q))
+  QDMY <- x %>%
+    mutate(Year = year(Date)) %>%
+    group_by(Year) %>%
+    summarize(Q = mean(Q), n = n())
+  QDMY <- mean(QDMY$Q)
+  QMDry <- min(QM$Q)
+  DRYQMEAN = QMDry / mean(QM$Q)
+  DRYQWET = QMDry / max(QM$Q)
 
   ## Seasonality index
-  SINDQ = (1 / (12 * QDMY)) * (sum(abs(QM - QDMY))) * (6/ 11)
+  SI <- (1 / (12 * QDMY)) * (sum(abs(QM$Q - QDMY))) * 6 / 11
 
-  ## TODO Flow duration curve
-  fdc(NewQ)
-  ## [FDC,R2FDC,IRH,Ptile] = iMHEA_FDC(NewQ,1);
+  ## % Flow Duration Curve, FDC Slope, and IRH.
+  ## if nargin >= 4
+  ##     [FDC,R2FDC,IRH,Ptile] = iMHEA_FDC(NewQ,1);
+  ## else
+  ##     [FDC,R2FDC,IRH,Ptile] = iMHEA_FDC(NewQ);
+  ## end
   ## % Percentiles from the FDC.
   ## Q95 = Ptile(1);
   ## Q50 = Ptile(4);
   ## Q10 = Ptile(7);
-  baseflow_uk(Date, Q) # Gustard et al., 1992
-  baseflow(NewDate, NewQ) # Chapman, 1999
 
-  ## TODO Compile daily flows
+  ## % Baseflow index at daily scale.
+  ## if nargin >= 5
+  ##     [~,BQ1,SQ1,BFI1,k1] = iMHEA_BaseFlowUK(Date,Q,1,1); % Gustard et al., 1992
+  ##     [~,~,BFI2,k2] = iMHEA_BaseFlow(NewDate,NewQ,1); % Chapman, 1999
+  ## else
+  ##     [~,BQ1,SQ1,BFI1,k1] = iMHEA_BaseFlowUK(Date,Q,1); % Gustard et al., 1992
+  ##     [~,~,BFI2,k2] = iMHEA_BaseFlow(NewDate,NewQ); % Chapman, 1999
+  ## end
+
+  ## % Compile daily flows.
   ## DQ = [datenum(DDate),DQ,BQ1,SQ1];
 
   ## % Richards-Baker flashiness index (RBI).
-  Qi_1 = abs(diff(NewQ))
-  RBI1 = sum(Qi_1) / sum(NewQ[2:length(NewQ)])
-  Qi_2 = 0.5 * (Qi_1[1:(length(Qi_1) - 1)]) + Qi_1[2:length(Qi_1)]
-  RBI2 = sum(Qi_2) / sum(NewQ[2:(length(NewQ) - 1)])
+  ## Qi_1 = abs(diff(NewQ));
+  ## RBI1 = sum(Qi_1)/sum(NewQ(2:end));
+  ## Qi_2 = 0.5*(Qi_1(1:end-1)+Qi_1(2:end));
+  ## RBI2 = sum(Qi_2)/sum(NewQ(2:end-1));
 
   ## % Hydrological indices for discharge.
   ## IndicesQ = [QDMin;...
@@ -514,6 +519,41 @@ process_q <- function(Date, Q, A = NA, normalize = FALSE, ...) {
   ##            DRYQMEAN;...
   ##            DRYQWET;...
   ##            SINDQ];
+}
+
+fdc <- function(Q, ...) {
+  ## Input:
+  ## Q = Discharge [l/s, l/s/km2, m3/s, mm, etc.].
+  ##
+  ## Output:
+  ## FDC   = Flow duration curve information [Q vs %].
+  ## R2FDC = Slope of the FDC between 33%-66% / Mean flow [-].
+  ## IRH   = Hydrological Regulation Index [-].
+  ## Ptile = Percentiles from the FDC, including:
+  ##         Q95   = 05th Percentile [l/s].
+  ##         Q75   = 25th Percentile [l/s].
+  ##         Q66   = 33rd Percentile [l/s].
+  ##         Q50   = 50th percentile [l/s].
+  ##         Q33   = 66th Percentile [l/s].
+  ##         Q25   = 75th Percentile [l/s].
+  ##         Q10   = 90th Percentile [l/s].
+  Q <- Q %>% na.omit()
+  k <- length(Q)
+  pct <- 100 * (1 - ((1:k) - .44) / (k + .12))
+  Q <- sort(Q)
+  ## plot(pct, Q)
+  ## q95 <- spline(x = pct, y = Q, xout = 95)$y
+  ## q75 <- spline(x = pct, y = Q, xout = 75)$y
+  q66 <- spline(x = pct, y = Q, xout = 66)$y
+  q50 <- spline(x = pct, y = Q, xout = 50)$y
+  q33 <- spline(x = pct, y = Q, xout = 33)$y
+  ## q25 <- spline(x = pct, y = Q, xout = 25)$y
+  ## q10 <- spline(x = pct, y = Q, xout = 10)$y
+  R2FDC <- (log10(q66) - log10(q33)) / (0.66 - 0.33)
+  ## Hydrological regulation index
+  auxFDC <- Q
+  auxFDC[pct < 50] = q50
+  IRH <- sum(auxFDC) / sum(Q)
 }
 
 monthly_flow <- function(Date, Q) {
