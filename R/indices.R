@@ -76,12 +76,12 @@ indices <- function(Date, P, Q, A, ...) {
   ## % CumQ = Cumulative Discharge [mm].
   ## % DP   = Daily Precipitation [mm].
   ## % DQ   = Daily Discharge and baseflow separation [l/s/km2].
-  process_p(Date, P)
-  process_q(Date, Q, A) # TODO
+  indices_p <- process_p(Date, P)
+  indices_q <- process_q(Date, Q, A)
 
   ## Runoff coefficient
-  QYEAR = IndicesQ[8] * 365 / 1000000 * 86400
-  RRa = QYEAR / IndicesP[1]
+  QYEAR = indices_q[[8]] * 365 / 1000000 * 86400
+  RRa = QYEAR / indices_p[[1]]
   CumQ[,2] = CumQ[,2] / 1000000 * 86400
   if (is.na(QYEAR)) {
     QYEAR = mean(DQ[,2]) / 1000000 * 86400
@@ -92,7 +92,416 @@ indices <- function(Date, P, Q, A, ...) {
   MDays = c(31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31)
   QM = QM * MDays / 1000000 * 86400
   RRm = sum(QM) / sum(PM)
-  ## TODO plots
+}
+
+indices_plus <- function(Date, Q, A, normalize, ...) {
+  ## % iMHEA Hydrological indices from Olden & Poff (2003).
+  ## % [M,F,D,T,R] = iMHEA_IndicesPlus(Date,P,Q,flag) calculates hydrological
+  ## % indices from Olden & Poff (2003) using discharge data.
+  ## %
+  ## % Input:
+  ## % Date = dd/mm/yyyy hh:mm:ss [date format].
+  ## % Q = Discharge [l/s or l/s/km2].
+  ## % A = Catchment area [km2] (Optional).
+  ## % flag = leave empty NOT to graph plots.
+  ## %
+  ## % Output:
+  ## % [M,F,D,T,R] = Hydrological Indices from Olden & Poff (2003).
+
+  ## % Normalize discharge.
+  ## if nargin >= 3
+  ##     Q = Q/A;
+  ## end
+
+  ## % Average data at daily basis.
+  ## [DDate,DQ,~,~,QDML] = iMHEA_Average(Date,Q,1440);
+  stopifnot(normalize & !is.na(A) | !normalize)
+  if (normalize)
+    Q <- Q / A
+
+  ## Average data at daily basis.
+  voids = identify_voids(tibble(Date = Date, Event = Q))
+  x <- tibble(Date = Date, Q = Q) %>%
+    mutate(Date = ceiling_date(Date, unit = "1 day")) %>%
+    group_by(Date) %>%
+    summarize(Q = sum(Q, na.rm = TRUE)) %>%
+    mutate(CumQ = cumsum(Q))
+  for (i in 1:nrow(voids)) {
+    idx <- which(x$Date > voids[i,1] & x$Date < voids[i,2])
+    x[idx,] = NA
+  }
+  x <- x %>% na.omit()
+  NewDate <- x$Date
+  NewQ <- x$Q
+  QDML <- mean(NewQ)
+  k <- length(NewQ)
+
+  ## Median of daily flows
+  MA2 <- median(DQ)
+  if (MA2 == 0) {
+    MA2 <- QDML
+    warning("Median of flows is zero. Assigned mean instead.")
+  }
+
+  ## Variability in daily flows
+  MA3 <- sd(NewQ) / QDML
+  ## Skewness in daily flows
+  MA5 <- QDML / MA2
+
+  fdc <- flow_duration_curve(NewQ)
+  Q75 <- fdc_percentile(fdc, 75)
+  Q25 <- fdc_percentile(fdc, 25)
+  Q10 <- fdc_percentile(fdc, 10)
+  Q1 <- fdc_percentile(fdc, 1)
+
+  ## High flow discharge
+  MH15 <- Q1 / MA2
+  MH16 <- Q10 / MA2
+  MH17 <- Q25 / MA2
+
+  ## Spread in daily flows
+  MA11 <- (Q25 - Q75) / MA2
+
+  ## % Annual and monthly average data.
+  ## [~,Q_Year,QDMM,~,~,Q_YMin,~] = iMHEA_MonthlyFlow(NewDate,NewQ);
+  ## % [~,Q_Year,QDMM,~,Q_Matrix,Q_Min_Year,~] = iMHEA_MonthlyFlow(NewDate,NewQ);
+  ## % Variability in monthly flows.
+  ## MonthMedian = median(QDMM);
+  ## % MonthIQR = iqr(QDMM);
+  ## % MA37 = MonthIQR / MonthMedian;
+
+  ## % Mean and minimum monthly flows.
+  ## YearFlow = Q_Year(:,2);
+  ## MA41 = mean(YearFlow);
+  ## % QDMMin = nanmin(Q_Matrix);
+  ## % MA12 = QDMM(1);
+  ## % MA19 = QDMM(7);
+  ## % MA18 = QDMM(6);
+  ## % ML4  = QDMMin(4);
+  ## % ML5  = QDMMin(5);
+  ## % ML9  = QDMMin(9);
+  ## % ML10 = QDMMin(10);
+
+  ## 30-day maxima and minima of daily discharge
+  Daycheck <- 30
+  Max30 <- rep(0, k)
+  Min30 <- rep(0, k)
+  for (i in 1:k) {
+    Today <- NewDate[i]
+    Y <- NewQ[NewDate >= Today & NewDate < (Today + Daycheck)]
+    Max30[i] <- max(Y)
+    Min30[i] <- min(Y)
+  }
+  DH13 <- mean(Max30) / MA2
+  DL13 <- mean(Min30) / MA2
+  ML21 <- sd(Min30) / mean(Min30)
+  MH14 <- median(Max30) / MA2
+
+  ## 7-day minima of daily discharge for baseflow index
+  Daycheck <- 7
+  Min7 <- rep(0, k)
+  for (i in 1:k) {
+    Today <- NewDate[i]
+    Y <- NewQ[NewDate >= Today & NewDate < (Today + Daycheck)]
+    Min7[i] <- min(Y)
+  }
+  ML17 <- min(Min7) / MA41
+  ML18 <- sd(Min7) / mean(Min7)
+
+  ## %% TIMING
+  ## % Julian Date (day number of current year) of annual minimum.
+  ## YearMinD = Q_YMin(:,3);
+  ## TL1  = median(YearMinD);
+  ## TL2  = std(YearMinD) / mean(YearMinD);
+
+  ## % Over Q25 (75th percentile).
+  ## [MH27,~,FH12,DH1516] = iMHEA_Pulse(NewDate,NewQ,Q25);
+  ## MH27 = MH27(2) / MA2;
+  ## FH1 = FH12(1)*365 / datenum(NewDate(end)-NewDate(1)+1);
+  ## FH2 = FH12(5);
+  ## DH15 = DH1516(2);
+  ## DH16 = DH1516(5);
+
+  ## % Over 3 times Median.
+  ## [~,MH22,FH3] = iMHEA_Pulse(NewDate,NewQ,3*MA2);
+  ## FH3 = FH3(1)*365 / datenum(NewDate(end)-NewDate(1));
+  ## MH22 = MH22(2) / MA2;
+
+  ## % Over 7 times Median.
+  ## % [MH26,MH23,FH4] = iMHEA_Pulse(NewDate,NewQ,7*MA2);
+  ## % FH4 = FH4(1)*365/datenum(NewDate(end)-NewDate(1));
+  ## % MH26 = MH26(2) / MA2;
+  ## % MH23 = MH23(2) / MA2;
+
+  ## % Over 3 times Monthly Median.
+  ## [~,~,FH6] = iMHEA_Pulse(NewDate,NewQ,3*MonthMedian);
+  ## FH6 = FH6(1)*365 / datenum(NewDate(end)-NewDate(1)+1);
+
+  ## % Over 7 times Monthly Median.
+  ## [~,~,FH7] = iMHEA_Pulse(NewDate,NewQ,7*MonthMedian);
+  ## FH7 = FH7(2)*365/datenum(NewDate(end)-NewDate(1)+1);
+
+  ## % Below Q75 (25th percentile).
+  ## [~,~,~,~,~,~,~,FL12,DL1617] = iMHEA_Pulse(NewDate,NewQ,Q75);
+  ## FL1 = FL12(1)*365 / datenum(NewDate(end)-NewDate(1));
+  ## FL2 = FL12(5);
+  ## DL16 = DL1617(2);
+  ## DL17 = DL1617(5);
+
+  ## % Below 5% of QDML.
+  ## [~,~,~,~,~,~,~,FL3] = iMHEA_Pulse(NewDate,NewQ,0.05*QDML);
+  ## FL3 = FL3(1)*365 / datenum(NewDate(end)-NewDate(1)+1);
+
+  ## % Over median/0.75.
+  ## [~,~,~,DH20] = iMHEA_Pulse(NewDate,NewQ,MA2/0.75);
+  ## DH20 = DH20(2);
+
+  ## % Below Q10 (90th percentile).
+  ## [~,~,~,~,TH3] = iMHEA_Pulse(NewDate,NewQ,Q10);
+  ## TH3 = TH3/365;
+
+  ## Rate of change
+  LogQ <- log(NewQ)
+  DiffLogQ <- diff(LogQ)
+  RA6 <- median(DiffLogQ[DiffLogQ > 0])
+  RA7 <- median(DiffLogQ[DiffLogQ < 0])
+
+  ## Number of increasing and decreasing flows (reversals) between days
+  RA8 <- 0
+  RA5 <- 0
+  for (i in 1:(k-1)) {
+    if (NewQ[i+1] > NewQ[i] & reversal == -1) {
+      RA8 <- RA8 + 1
+      reversal <- 1
+    } else if (NewQ[i+1] < NewQ[i] & reversal == 1) {
+      RA8 <- RA8 + 1
+      reversal <- -1
+    }
+    if (NewQ[i+1] > NewQ[i]) {
+      RA5 <- RA5 + 1
+    }
+  }
+  n_days <- as.numeric(max(NewDate) - min(NewDate), units = "days")
+  RA8 <- RA8 / n_days
+  RA5 <- RA5 / n_days
+
+  ## % Hydrological indices for discharge.
+  ## M = [MA5;...
+  ##     MA41;...
+  ##     MA3;...
+  ##     MA11;...
+  ##     ML17;...
+  ##     ML21;...
+  ##     ML18;...
+  ##     MH16;...
+  ##     MH14;...
+  ##     MH22;...
+  ##     MH27];
+
+  ## F = [FL3;...
+  ##     FL2;...
+  ##     FL1;...
+  ##     FH3;...
+  ##     FH6;...
+  ##     FH7;...
+  ##     FH2;...
+  ##     FH1];
+
+  ## D = [DL17;...
+  ##     DL16;...
+  ##     DL13;...
+  ##     DH13;...
+  ##     DH16;...
+  ##     DH20;...
+  ##     DH15];
+
+  ## T = [TH3;...
+  ##     TL2;...
+  ##     TL1];
+
+  ## R = [RA8;...
+  ##     RA5;...
+  ##     RA6;...
+  ##     RA7];
+}
+
+climate_indices <- function(...) {
+  NULL
+}
+
+pulse <- function(Date, Q, Lim, ...) {
+  ## function [MH,VH,FH,DH,TH,ML,VL,FL,DL,TL] = iMHEA_Pulse(Date,Q,Lim,varargin)
+  ## %iMHEA Pulse count.
+  ## % [MH,VH,FH,DH,TH,ML,VL,FL,DL,TL] = iMHEA_Pulse(Date,Q,Lim,flag) calculates
+  ## % magnitude, volume, frequency, duration, timing and coefficientes of
+  ## % variation for each property, of pulses in Q over the threshold Lim.
+  ## %
+  ## % Input:
+  ## % Date = dd/mm/yyyy hh:mm:ss [date format].
+  ## % Q    = Discharge [l/s or l/s/km2].
+  ## % Lim  = Threshold [l/s or l/s/km2].
+  ## % flag = leave empty NOT to graph plots or print results.
+  ## %
+  ## % Output:
+  ## % M = (Total Average Min Max CVar) magnitude of pulses [l/s].
+  ## % V = (Total Average Min Max CVar) volume of pulses [l].
+  ## % F = (Total Average Min Max CVar) frequency of pulses [/year].
+  ## % D = (Total Average Min Max CVar) duration of pulses [day].
+  ## % T = Max period with no pulse occurrence [day].
+  ## %
+  ## % These variables are defined for:
+  ## %      H = High pulses.
+  ## %      L = Low pulses.
+
+  ## Initialize variables
+  Years <- year(Date)
+  HFreq <- tibble(Year = unique(Years) %>% sort(), Q = 0)
+  LFreq <- HFreq
+  Date <- Date[!is.na(Q)]
+  Q <- Q[!is.na(Q)]
+  k <- length(Q)
+  ## Counters
+  nH <- nL <- 1
+  HPeriod <- LPeriod <- 0
+  HPeak <- LPeak <- Inf
+  HVal <- LVal <- 0
+  ## Subtract threshold
+  ModQ <- Q - Lim
+  Date <- c(Date, rev(Date)[1])
+  ModQ <- c(ModQ, rev(ModQ)[1])
+
+  for (j = 1:k) {
+    if (ModQ[j] >= 0) {
+      nH <- nH + 1
+      row_ix <- which(HFreq$Year %in% Years[j])
+      HFreq$Q[row_ix] <- HFreq$Q[row_ix] + 1
+      HPeriod[nH, 1] <- Date[j] # Initial date of high pulse interval
+      HPeriod[nH, 2] <- Date[j+1] # Final date of high pulse interval
+      HPeak[nH, 1] = Q[j]         # Pulse peak
+      HVol[nH] = (
+        as.numeric(Date[j+1] - Date[j], units = "days")
+        * (max(ModQ[j+1], 0) + max(ModQ[j], 0)) / 2
+      )
+      if (HPeriod(nH, 1) == HPeriod[nH-1, 2]) {
+        ## Aggregate continuous pulses
+        nH <- nH - 1
+        HFreq$Q[row_ix] <- HFreq[row_ix] - 1
+        HPeriod[nH, 2] <- HPeriod[nH+1, 2]
+        HPeriod[nH+1,] <- NA
+        HPeak[nH, 1] <- max(HPeak[nH,1], HPeak[nH+1])
+        HPeak[nH+1] <- NA
+        HVol[nH] <- HVol[nH+1] + HVol[nH]
+        HVol[nH+1] <- NA
+      }
+    } else {
+      nL <- nL + 1
+      LFreq[row_ix] <- LFreq[row_ix] + 1
+      LPeriod[nL, 1] <- Date[j]
+      LPeriod[nL, 2] <- Date[j+1]
+      LPeak[nL, 1] <- Q[j]
+      LVol[nH] = (
+        as.numeric(Date[j+1] - Date[j], units = "days")
+        * (min(ModQ[j+1], 0) + min(ModQ[j], 0)) / 2
+      )
+      if (LPeriod[nL, 1] == LPeriod[nL-1,2]) {
+        ## Aggregate continuous pulses
+        nL <- nL - 1
+        LFreq[row_ix] <- LFreq[row_ix] - 1
+        LPeriod[nL, 2] <- LPeriod[nL+1, 2]
+        LPeriod[nL+1,] <- NA
+        LPeak[nL, 1] <- min(LPeak(nL), LPeak(nL+1))
+        LPeak[nL+1] <- NA
+        LVol[nL] <- LVol[nL+1] + LVol[nL]
+        LVol[nL+1] <- NA
+      }
+    }
+  }
+  ## % Restore sizes
+  ## HFreq(:,1) = []; HPeriod(1,:) = []; nH = nH-1; HPeak(1) = [];
+  ## LFreq(:,1) = []; LPeriod(1,:) = []; nL = nL-1; LPeak(1) = [];
+
+  ## % Low pulse count.
+  if (nL(1) == 0) {
+    ## % No pulses
+    FL = zeros(1,5)
+    ML = zeros(1,5)
+    VL = zeros(1,5)
+    DL = zeros(1,5)
+  } else {
+    ## % Obtain total, mean, min, max, Cv, for each property
+    FL = c(
+      sum(LFreq),
+      mean(LFreq),
+      min(LFreq),
+      max(LFreq),
+      std(LFreq) / mean(LFreq)
+    )
+    ML = c(
+      sum(LPeak),
+      mean(LPeak),
+      min(LPeak),
+      max(LPeak),
+      std(LPeak) / mean(LPeak)
+    )
+    VL = c(
+      sum(LVol),
+      mean(LVol),
+      min(LVol),
+      max(LVol),
+      std(LVol) / mean(LVol)
+    )
+    DL = c(
+      sum(LPeriod[,2] - LPeriod[,1]),
+      mean(LPeriod[,2] - LPeriod[,1]),
+      min(LPeriod[,2] - LPeriod[,1]),
+      max(LPeriod[,2] - LPeriod[,1]),
+      std(LPeriod[,2] - LPeriod[,1)) / mean(LPeriod[,2] - LPeriod[,1])
+    )
+  }
+
+  ## High pulse count.
+  if (nH(1) == 0) {
+    ## % No pulses
+    FH = zeros(1,5)
+    MH = zeros(1,5)
+    VH = zeros(1,5)
+    DH = zeros(1,5)
+  } else {
+    ## % Obtain total, mean, min, max, Cv, for each property
+    FH = c(
+      sum(HFreq),
+      mean(HFreq),
+      min(HFreq),
+      max(HFreq),
+      std(HFreq) / mean(HFreq)
+    )
+    MH = c(
+      sum(HPeak),
+      mean(HPeak),
+      min(HPeak),
+      max(HPeak),
+      std(HPeak) / mean(HPeak)
+    )
+    VH = c(
+      sum(HVol),
+      mean(HVol),
+      min(HVol),
+      max(HVol),
+      std(HVol) / mean(HVol)
+    )
+    DH = c(
+      sum(HPeriod[,2] - HPeriod[,1]),
+      mean(HPeriod[,2] - HPeriod[,1]),
+      min(HPeriod[,2] - HPeriod[,1]),
+      max(HPeriod[,2] - HPeriod[,1]),
+      std(HPeriod[,2] - HPeriod[,1)) / mean(HPeriod[,2] - HPeriod[,1])
+    )
+  }
+  TL <- DH[3]
+  TH <- DL[3]
+  ## ## % Restore vector.
+  ## Date(end) = [];
+  ## Date = datetime(Date,'ConvertFrom','datenum');
 }
 
 ## function [Climate,Indices] = iMHEA_IndicesTotal(Date,P,Q,A,varargin)
@@ -468,15 +877,20 @@ process_q <- function(Date, Q, A = NA, normalize = FALSE, ...) {
   SI <- (1 / (12 * QDMY)) * (sum(abs(QM$Q - QDMY))) * 6 / 11
 
   ## % Flow Duration Curve, FDC Slope, and IRH.
-  ## if nargin >= 4
-  ##     [FDC,R2FDC,IRH,Ptile] = iMHEA_FDC(NewQ,1);
-  ## else
-  ##     [FDC,R2FDC,IRH,Ptile] = iMHEA_FDC(NewQ);
-  ## end
-  ## % Percentiles from the FDC.
-  ## Q95 = Ptile(1);
-  ## Q50 = Ptile(4);
-  ## Q10 = Ptile(7);
+  fdc <- flow_duration_curve(Q)
+  Q95 <- fdc_percentile(fdc, 95)
+  Q75 <- fdc_percentile(fdc, 75)
+  Q66 <- fdc_percentile(fdc, 66)
+  Q50 <- fdc_percentile(fdc, 50)
+  Q33 <- fdc_percentile(fdc, 33)
+  Q25 <- fdc_percentile(fdc, 25)
+  Q10 <- fdc_percentile(fdc, 10)
+  R2FDC <- (log10(Q66) - log10(Q33)) / (0.66 - 0.33)
+
+  ## Hydrological regulation index
+  auxFDC <- Q
+  auxFDC[pct < 50] = q50
+  IRH <- sum(auxFDC) / sum(Q)
 
   ## % Baseflow index at daily scale.
   ## if nargin >= 5
@@ -486,6 +900,12 @@ process_q <- function(Date, Q, A = NA, normalize = FALSE, ...) {
   ##     [~,BQ1,SQ1,BFI1,k1] = iMHEA_BaseFlowUK(Date,Q,1); % Gustard et al., 1992
   ##     [~,~,BFI2,k2] = iMHEA_BaseFlow(NewDate,NewQ); % Chapman, 1999
   ## end
+  BQ1 <- NA
+  SQ1 <- NA
+  BFI1 <- NA
+  k1 <- NA
+  BFI2 <- NA
+  k2 <- NA
 
   ## % Compile daily flows.
   ## DQ = [datenum(DDate),DQ,BQ1,SQ1];
@@ -495,33 +915,37 @@ process_q <- function(Date, Q, A = NA, normalize = FALSE, ...) {
   ## RBI1 = sum(Qi_1)/sum(NewQ(2:end));
   ## Qi_2 = 0.5*(Qi_1(1:end-1)+Qi_1(2:end));
   ## RBI2 = sum(Qi_2)/sum(NewQ(2:end-1));
+  RBI1 <- NA
+  RBI2 <- NA
 
-  ## % Hydrological indices for discharge.
-  ## IndicesQ = [QDMin;...
-  ##            Q95;...
-  ##            DayQ0;...
-  ##            PQ0;...
-  ##            QMDry;...
-  ##            QDMax;...
-  ##            Q10;...
-  ##            QDMY;...
-  ##            QDML;...
-  ##            Q50;...
-  ##            BFI1;...
-  ##            k1;...
-  ##            BFI2;...
-  ##            k2;...
-  ##            RANGE;...
-  ##            R2FDC;...
-  ##            IRH;...
-  ##            RBI1;...
-  ##            RBI2;...
-  ##            DRYQMEAN;...
-  ##            DRYQWET;...
-  ##            SINDQ];
+  IndicesQ <- list(QDMin = QDMin,
+                   Q95 = Q95,
+                   DayQ0 = DayQ0,
+                   PQ0 = PQ0,
+                   QMDry = QMDry,
+                   QDMax = QDMax,
+                   Q10 = Q10,
+                   QDMY = QDMY,
+                   QDML = QDML,
+                   Q50 = Q50,
+                   BFI1 = BFI1,
+                   k1 = k1,
+                   BFI2 = BFI2,
+                   k2 = k2,
+                   RANGE = RANGE,
+                   R2FDC = R2FDC,
+                   IRH = IRH,
+                   RBI1 = RBI1,
+                   DRYQMEAN = DRYQMEAN,
+                   DRYQWET = DRYQWET,
+                   SINDQ = SINDQ)
 }
 
-fdc <- function(Q, ...) {
+fdc_percentile <- function(fdc, percentile, ...) {
+  spline(x = fdc$Exceedance_Pct, y = fdc$Q, xout = percentile)$y
+}
+
+flow_duration_curve <- function(Q, ...) {
   ## Input:
   ## Q = Discharge [l/s, l/s/km2, m3/s, mm, etc.].
   ##
@@ -541,19 +965,20 @@ fdc <- function(Q, ...) {
   k <- length(Q)
   pct <- 100 * (1 - ((1:k) - .44) / (k + .12))
   Q <- sort(Q)
-  ## plot(pct, Q)
-  ## q95 <- spline(x = pct, y = Q, xout = 95)$y
-  ## q75 <- spline(x = pct, y = Q, xout = 75)$y
-  q66 <- spline(x = pct, y = Q, xout = 66)$y
-  q50 <- spline(x = pct, y = Q, xout = 50)$y
-  q33 <- spline(x = pct, y = Q, xout = 33)$y
-  ## q25 <- spline(x = pct, y = Q, xout = 25)$y
-  ## q10 <- spline(x = pct, y = Q, xout = 10)$y
-  R2FDC <- (log10(q66) - log10(q33)) / (0.66 - 0.33)
-  ## Hydrological regulation index
-  auxFDC <- Q
-  auxFDC[pct < 50] = q50
-  IRH <- sum(auxFDC) / sum(Q)
+  tibble(Q = Q, Exceedance_Pct = pct)
+  ## ## plot(pct, Q)
+  ## ## q95 <- spline(x = pct, y = Q, xout = 95)$y
+  ## ## q75 <- spline(x = pct, y = Q, xout = 75)$y
+  ## q66 <- spline(x = pct, y = Q, xout = 66)$y
+  ## q50 <- spline(x = pct, y = Q, xout = 50)$y
+  ## q33 <- spline(x = pct, y = Q, xout = 33)$y
+  ## ## q25 <- spline(x = pct, y = Q, xout = 25)$y
+  ## ## q10 <- spline(x = pct, y = Q, xout = 10)$y
+  ## R2FDC <- (log10(q66) - log10(q33)) / (0.66 - 0.33)
+  ## ## Hydrological regulation index
+  ## auxFDC <- Q
+  ## auxFDC[pct < 50] = q50
+  ## IRH <- sum(auxFDC) / sum(Q)
 }
 
 monthly_flow <- function(Date, Q) {
