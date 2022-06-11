@@ -113,7 +113,7 @@ indices_plus <- function(Date, Q, A, normalize, ...) {
   ##     Q = Q/A;
   ## end
 
-  ## % Average data at daily basis.
+  ## Average data at daily basis.
   ## [DDate,DQ,~,~,QDML] = iMHEA_Average(Date,Q,1440);
   stopifnot(normalize & !is.na(A) | !normalize)
   if (normalize)
@@ -285,7 +285,6 @@ indices_plus <- function(Date, Q, A, normalize, ...) {
   RA8 <- RA8 / n_days
   RA5 <- RA5 / n_days
 
-  ## % Hydrological indices for discharge.
   ## M = [MA5;...
   ##     MA41;...
   ##     MA3;...
@@ -325,8 +324,83 @@ indices_plus <- function(Date, Q, A, normalize, ...) {
   ##     RA7];
 }
 
-climate_indices <- function(...) {
+aggregate_q <- function(Q, Date, ...) {
   NULL
+}
+
+aggregate_p <- function(P, Date, unit = "1 day", ...) {
+  voids = identify_voids(tibble(Date = Date, Event = P))
+  x <- tibble(Date = Date, P = P) %>%
+    mutate(Date = ceiling_date(Date, unit = unit)) %>%
+    group_by(Date) %>%
+    summarize(P = sum(P, na.rm = TRUE)) %>%
+    mutate(CumP = cumsum(P))
+  for (i in 1:nrow(voids)) {
+    idx <- which(x$Date > voids[i,1] & x$Date < voids[i,2])
+    x[idx,] = NA
+  }
+  x <- x %>% na.omit()
+}
+
+climate_p <- function(...) {
+  ## %imhea Catchment climatic characteristics derived from precipitation.
+  ## % Input:
+  ## % Date = dd/mm/yyyy hh:mm:ss [date format].
+  ## % P = Precipitation [mm].
+  ## %
+  ## % Output:
+  ## % ClimateP = Climatic characteristics derived from precipitation.
+  ## %            RMED1D = Median annual maximum 1-day precipitation [mm].
+  ## %            RMED2D = Median annual maximum 2-day precipitation [mm].
+  ## %            RMED1H = Median annual maximum 1-hour precipitation [mm].
+  ## %           *iMAX1D = Maximum 1-day precipitation intensity [mm/h].
+  ## %           *iMAX2D = Maximum 2-day precipitation intensity [mm/h].
+  ## %           *iMAX1H = Maximum 1-hour precipitation intensity [mm/h].
+  ## %            PVAR   = Coefficient of variation in precipitation [-].
+  x_day <- aggregate_p(P, Date, unit = "1 day")
+  x_hour <- aggregate_p(P, Date, unit = "1 hour")
+  DDate <- x_day$Date
+  DP <- x_day$P
+  HDate <- x_hour$Date
+  HP <- x_hour$P
+
+  NewDate <- x_day$Date
+  NewP <- x_day$P
+  NewHDate <- x_hour$Date
+  NewHP <- x_hour$P
+
+  ## Mean and variation in daily precipitation.
+  PBAR <- mean(NewP)
+  PSTD <- sd(NewP)
+  PVAR <- PSTD / PBAR
+
+  x_2day <- aggregate_p(NewP, NewDate, unit = "2 day")
+  Sum2D <- x_2day$P
+
+  PYMax1D <- monthly_rain(NewDate, NewP)$P_Max_Year
+  PYMax2D <- monthly_rain(NewDate, Sum2D)$P_Max_Year
+  PYMax1H <- monthly_rain(NewHDate, NewHP)$P_Max_Year
+  RMED1D <- median(PYMax1D[,2])
+  RMED2D <- median(PYMax2D[,2])
+  RMED1H <- median(PYMax1H[,2])
+
+  idc <- idc_fun(Date, P)
+  ## intensity indices
+  ## FIXME
+  ## Durations: 5, 10, 15, 30, 60 min; 2, 4, 12, 24 hours; 2 days.
+  ## D = [1 2 3 6 12 24 48 144 288 576];
+  iMAX1D <- idc$Intensity[idc$D == 288]
+  iMAX2D <- idc$Intensity[idc$D == 576]
+  iMAX1H <- idc$Intensity[idc$D == 12]
+
+  ## % Physical characteristics derived from precipitation.
+  list(RMED1D = RMED1D,
+       RMED2D = RMED2D,
+       RMED1H = RMED1H,
+       iMAX1D = iMAX1D,
+       iMAX2D = iMAX2D,
+       iMAX1H = iMAX1H,
+       PVAR = PVAR)
 }
 
 pulse <- function(Date, Q, Lim, ...) {
@@ -370,7 +444,7 @@ pulse <- function(Date, Q, Lim, ...) {
   Date <- c(Date, rev(Date)[1])
   ModQ <- c(ModQ, rev(ModQ)[1])
 
-  for (j = 1:k) {
+  for (j in 1:k) {
     if (ModQ[j] >= 0) {
       nH <- nH + 1
       row_ix <- which(HFreq$Year %in% Years[j])
@@ -455,7 +529,7 @@ pulse <- function(Date, Q, Lim, ...) {
       mean(LPeriod[,2] - LPeriod[,1]),
       min(LPeriod[,2] - LPeriod[,1]),
       max(LPeriod[,2] - LPeriod[,1]),
-      std(LPeriod[,2] - LPeriod[,1)) / mean(LPeriod[,2] - LPeriod[,1])
+      std(LPeriod[,2] - LPeriod[,1]) / mean(LPeriod[,2] - LPeriod[,1])
     )
   }
 
@@ -494,7 +568,7 @@ pulse <- function(Date, Q, Lim, ...) {
       mean(HPeriod[,2] - HPeriod[,1]),
       min(HPeriod[,2] - HPeriod[,1]),
       max(HPeriod[,2] - HPeriod[,1]),
-      std(HPeriod[,2] - HPeriod[,1)) / mean(HPeriod[,2] - HPeriod[,1])
+      std(HPeriod[,2] - HPeriod[,1]) / mean(HPeriod[,2] - HPeriod[,1])
     )
   }
   TL <- DH[3]
@@ -1042,10 +1116,7 @@ monthly_flow <- function(Date, Q) {
 }
 
 monthly_rain <- function(Date, P) {
-  ## %iMHEA Calculation of monthly and annual Precipitation averages.
-  ## % [P_Month,P_Year,P_Avg_Month,P_Avg_Year,P_Matrix] =
-  ## % iMHEA_MonthlyRain(Date,P,flag).
-  ## %
+  ## % iMHEA Calculation of monthly and annual Precipitation averages.
   ## % Input:
   ## % Date = dd/mm/yyyy hh:mm:ss [date format].
   ## % P    = Precipitation [mm].
@@ -1059,11 +1130,6 @@ monthly_rain <- function(Date, P) {
   ## % P_Matrix    = Matrix of precipitation data (Year vs Months) [mm].
   ## % P_Min_Year  = Time series of minimum annual discharge [year and l/s or l/s/km2].
   ## % P_Max_Year  = Time series of maximum annual discharge [year and l/s or l/s/km2].
-  ## %
-  ## % Boris Ochoa Tocachi
-  ## % Imperial College London
-  ## % Created in September, 2017
-  ## % Last edited in November, 2017
   Years = format(Date, "%Y") %>% as.numeric
   n = max(Years) - min(Years) + 1 # Number of years
   Months = format(Date, "%m") %>% as.numeric
@@ -1094,12 +1160,14 @@ monthly_rain <- function(Date, P) {
 
   P_Month = matrixPM1 # TODO
   P_Matrix = matrixPM1 # TODO
-  ## P_Month = matrixPM1(:);
-  ## P_Matrix = matrixPM1';
-  ## P_Year = [(min(Years):max(Years))' , P_Year];
-  ## P_YMin = [(min(Years):max(Years))' , P_YMin];
-  ## P_YMax = [(min(Years):max(Years))' , P_YMax];
   ## TODO plotting
+  list(P_Month = P_Month,
+       P_Year = P_Year,
+       P_Avg_Month = P_Avg_Month,
+       P_Avg_Year = P_Avg_Year,
+       P_Matrix = P_Matrix,
+       P_Min_Year = P_Min_Year,
+       P_Max_Year = P_Max_Year)
 }
 
 ## %% PLOT RESULTS
