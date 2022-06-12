@@ -11,7 +11,7 @@ depure <- function(x, ...) {
 }
 
 #' @export
-depure.tipping_bucket_rain_gauge <- function(x, ...) {
+depure.tbl_ts <- function(x, ...) {
   ## Clone of iMHEA_Depure.m
   ## https://github.com/tidyverse/design/issues/42 - discussion on verbosity
   min_tip_interval = 1.1 # TODO make this a package option
@@ -24,9 +24,9 @@ depure.tipping_bucket_rain_gauge <- function(x, ...) {
   x = x %>% mutate(Event = ifelse(Interval <= min_tip_interval, 0, Event))
   ## %% PRINT RESULTS
   depured_rainfall_volume = x$Event %>% sum(na.rm = TRUE)
-  message(sprintf("Removing tips occurring faster than `min_tip_interval` = %6.2f seconds", min_tip_interval))
-  message(sprintf("Number of tips identified: %4i.", length(which(x$Interval <= min_tip_interval))))
-  message(sprintf("Rainfall volume before depuration: %8.2f mm", initial_rainfall_volume))
-  message(sprintf("Rainfall volume after depuration: %8.2f mm", depured_rainfall_volume))
+  ## message(sprintf("Removing tips occurring faster than `min_tip_interval` = %6.2f seconds", min_tip_interval))
+  ## message(sprintf("Number of tips identified: %4i.", length(which(x$Interval <= min_tip_interval))))
+  ## message(sprintf("Rainfall volume before depuration: %8.2f mm", initial_rainfall_volume))
+  ## message(sprintf("Rainfall volume after depuration: %8.2f mm", depured_rainfall_volume))
   x
 }

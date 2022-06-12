@@ -20,6 +20,8 @@ aggregation_cs <- function(x,
                            ...) {
   Event_Date <- x[["Date"]]
   Event_mm <- x[["Event"]]
+  event_units <- units(Event_mm)
+  Event_mm <- Event_mm %>% as.numeric()
 
   ## User-defined variables
   ## TODO document these values or set as package options
@@ -327,6 +329,7 @@ aggregation_cs <- function(x,
   cat(sprintf('Rainfall volume after aggregation: %8.2f mm.\n', sum(NewP, na.rm = TRUE)))
   out <- tibble(Date = NewDate, NewP=NewP, CumP=CumP, Single=Single)
   out <- out %>% filter(NewDate >= DI & NewDate <= DF)
+  ## out <- out %>% mutate(NewP = set_units(NewP, event_units, mm)
   out
 }
 

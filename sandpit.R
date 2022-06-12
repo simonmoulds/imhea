@@ -24,6 +24,7 @@ iMHEA_Catchment_AREA = read_csv(
 
 ## TODO add this to package
 valid_timezones <- function() return(OlsonNames())
+
 imhea_to_tsibble <- function(x,
                              date_column = "Date",
                              date_format = "%d/%m/%Y %H:%M:%S",
@@ -36,6 +37,7 @@ imhea_to_tsibble <- function(x,
     x %>%
     rename(Date = date_column) %>%
     mutate(Date = as.POSIXct(Date, tz = tz, format = date_format)) %>%
+    arrange(Date) %>%
     rowid_to_column() %>%
     as_tsibble(key = rowid, index = Date, regular = regular)
   x
@@ -55,10 +57,11 @@ tipping_bucket_rain_gauge <- function(x,
   stopifnot(date_column %in% names(x))
   stopifnot(event_column %in% names(x))
   stopifnot(!missing(event_units))
-
   x <- x %>% rename(Date = date_column, Event = event_column)
   x <- x %>% imhea_to_tsibble(date_column, ..., regular = FALSE)
+  x <- x %>% depure()
   x <- x %>% mutate(Event = set_units(Event, event_units, mode = "standard"))
+  ## TODO depure should not return p1 with a new column 'Interval'
   if (!raw) {
     class(x) <- c("tipping_bucket_rain_gauge", class(x))
     return(x)
@@ -115,15 +118,9 @@ p2_raw = read_csv(
 )
 
 ## Do some initial data preparation
-p1 <-
-  p1_raw %>%
-  tipping_bucket_rain_gauge(event_units = "mm") %>%
-  depure() # TODO depure should not return p1 with a new column 'Interval'
-
-p2 <-
-  p2_raw %>%
-  tipping_bucket_rain_gauge(event_units = "mm") %>%
-  depure()
+## TODO Call aggregation_cs from within constructor?
+p1 <- p1_raw %>% tipping_bucket_rain_gauge(event_units = "mm")
+p2 <- p2_raw %>% tipping_bucket_rain_gauge(event_units = "mm")
 
 q1 <-
   q1_raw %>%
@@ -131,8 +128,7 @@ q1 <-
     discharge_units = "m^3/s",
     level_column = "Level cm",
     level_units = "cm"
-  ) ## %>%
-  ## tsibble::fill_gaps(.full = TRUE)
+  )
 
 ## Aggregate precipitation to match discharge interval
 
@@ -154,46 +150,44 @@ mintip <- TRUE
 halves <- TRUE
 
 ## This works, but using Matlab output directly for testing
-## x1 <- aggregation_cs(p1, timescale = timescale)
-## ## Not working properly:
-## ## Problem arises because of negative time differences
-## p2$Date %>% diff() %>% min()
-## p2 <- p2 %>% arrange(Date)
-## p2$Date %>% diff() %>% min()
-## x2 <- aggregation_cs(p2, timescale = timescale)
+x1 <- aggregation_cs(p1, timescale = timescale)
+x2 <- aggregation_cs(p2, timescale = timescale)
 
-x1 <-
-  read_csv("inst/testdata/matlab_aggregation_cs_output_llo_p1.csv") %>%
-  setNames(c("Date", "NewP", "CumP", "Single")) %>%
-  mutate(Date = (Date - 719529) * 86400) %>%
-  mutate(Date = as.POSIXct(Date, tz = "UTC", origin = "1970-01-01")) %>%
-  mutate(Date = round_date(Date, unit = "0.25 seconds")) %>%
-  mutate(Date = force_tz(Date, "Etc/GMT-5"))
+## ## Matlab iMHEA_AggregationCS(...) output
+## x1 <-
+##   read_csv("inst/testdata/matlab_aggregation_cs_output_llo_p1.csv") %>%
+##   setNames(c("Date", "NewP", "CumP", "Single")) %>%
+##   mutate(Date = (Date - 719529) * 86400) %>%
+##   mutate(Date = as.POSIXct(Date, tz = "UTC", origin = "1970-01-01")) %>%
+##   mutate(Date = round_date(Date, unit = "0.25 seconds")) %>%
+##   mutate(Date = force_tz(Date, "Etc/GMT-5"))
 
-x2 <-
-  read_csv("inst/testdata/matlab_aggregation_cs_output_llo_p2.csv") %>%
-  setNames(c("Date", "NewP", "CumP", "Single")) %>%
-  mutate(Date = (Date - 719529) * 86400) %>%
-  mutate(Date = as.POSIXct(Date, tz = "UTC", origin = "1970-01-01")) %>%
-  mutate(Date = round_date(Date, unit = "0.25 seconds")) %>%
-  mutate(Date = force_tz(Date, "Etc/GMT-5"))
-
-Date1 <- x1$Date
-P1 <- x1$NewP
-Date2 <- x2$Date
-P2 <- x2$NewP
+## x2 <-
+##   read_csv("inst/testdata/matlab_aggregation_cs_output_llo_p2.csv") %>%
+##   setNames(c("Date", "NewP", "CumP", "Single")) %>%
+##   mutate(Date = (Date - 719529) * 86400) %>%
+##   mutate(Date = as.POSIXct(Date, tz = "UTC", origin = "1970-01-01")) %>%
+##   mutate(Date = round_date(Date, unit = "0.25 seconds")) %>%
+##   mutate(Date = force_tz(Date, "Etc/GMT-5"))
 
 ## This works (at least the parts that I've tested)
 x_fill <- fill_gaps(x1$Date, x1$NewP, x2$Date, x2$NewP)
 
-x_matlab_fill_gaps_output <-
-  read_csv("inst/testdata/matlab_fill_gaps_output_llo_p1.csv") %>%
-  setNames(c("Date", "P1", "P2")) %>%
-  mutate(Date = (Date - 719529) * 86400) %>%
-  mutate(Date = as.POSIXct(Date, tz = "UTC", origin = "1970-01-01")) %>%
-  mutate(Date = round_date(Date, unit = "0.25 seconds")) %>%
-  mutate(Date = force_tz(Date, "Etc/GMT-5"))
+## x_matlab_fill_gaps_output <-
+##   read_csv("inst/testdata/matlab_fill_gaps_output_llo_p1.csv") %>%
+##   setNames(c("Date", "P1", "P2")) %>%
+##   mutate(Date = (Date - 719529) * 86400) %>%
+##   mutate(Date = as.POSIXct(Date, tz = "UTC", origin = "1970-01-01")) %>%
+##   mutate(Date = round_date(Date, unit = "0.25 seconds")) %>%
+##   mutate(Date = force_tz(Date, "Etc/GMT-5"))
 
+## plot(cumsum(x_matlab_fill_gaps_output$P1), type = "l", col = "blue")
+## lines(cumsum(x_fill$Prec1), col = "magenta")
+## plot(cumsum(x_matlab_fill_gaps_output$P2), type = "l", col = "blue")
+## lines(cumsum(x_fill$Prec2), col = "magenta")
+
+## TODO make this a part of a catchment object
+## FIXME this is not currently used?
 PrecHRes <- list(x1, x2)
 nrg <- 2
 if (nrg > 1) {
@@ -222,22 +216,37 @@ if (nrg > 1) {
 }
 
 q1 <- average(q1$Date, q1$Q, timescale)
-
-x <- q1 %>% full_join(x_fill)
+x <- q1 %>% full_join(x_fill) # Catchment object, essentially
 
 x_daily <-
   x %>%
   as_tibble() %>%
   mutate(Date = ceiling_date(Date, unit = "1 day")) %>%
   group_by(Date) %>%
-  summarize(n = sum(is.na(Q)), Q = mean(Q), across(starts_with("Prec"), mean, na.rm = TRUE))
+  summarize(
+    n = sum(is.na(Q)),
+    Q = mean(Q),
+    across(starts_with("Prec"), sum, na.rm = TRUE)
+  )
 
 x_hourly <-
   x %>%
   as_tibble() %>%
   mutate(Date = ceiling_date(Date, unit = "1 hour")) %>%
   group_by(Date) %>%
-  summarize(n = sum(is.na(Q)), Q = mean(Q), across(starts_with("Prec"), sum, na.rm = TRUE))
+  summarize(
+    n = sum(is.na(Q)),
+    Q = mean(Q),
+    across(starts_with("Prec"), sum, na.rm = TRUE)
+  )
+
+plot(x_daily$Date, x_daily$Q, type = "l", col = "blue")
+plot(x_hourly$Date, x_hourly$Q, type = "l", col = "magenta")
+
+## Up to this point:
+## - what are the main plots needed?
+## - what is the main output the user expects?
+##
 
 stop()
 
