@@ -59,9 +59,9 @@ tipping_bucket_rain_gauge <- function(x,
   stopifnot(!missing(event_units))
   x <- x %>% rename(Date = date_column, Event = event_column)
   x <- x %>% imhea_to_tsibble(date_column, ..., regular = FALSE)
+  ## TODO depure should not return p1 with a new column 'Interval'
   x <- x %>% depure()
   x <- x %>% mutate(Event = set_units(Event, event_units, mode = "standard"))
-  ## TODO depure should not return p1 with a new column 'Interval'
   if (!raw) {
     class(x) <- c("tipping_bucket_rain_gauge", class(x))
     return(x)
@@ -95,6 +95,7 @@ stream_gauge <- function(x,
   x <- x %>% mutate(Q = set_units(Q, discharge_units, mode = "standard"))
   if ("H" %in% names(x))
     x <- x %>% mutate(H = set_units(H, level_units, mode = "standard"))
+  class(x) <- c("stream_gauge", class(x))
   return(x)
 }
 
@@ -170,8 +171,8 @@ x2 <- aggregation_cs(p2, timescale = timescale)
 ##   mutate(Date = round_date(Date, unit = "0.25 seconds")) %>%
 ##   mutate(Date = force_tz(Date, "Etc/GMT-5"))
 
-## This works (at least the parts that I've tested)
-x_fill <- fill_gaps(x1$Date, x1$NewP, x2$Date, x2$NewP)
+## ## This works (at least the parts that I've tested)
+## x_fill <- fill_gaps(x1$Date, x1$NewP, x2$Date, x2$NewP)
 
 ## x_matlab_fill_gaps_output <-
 ##   read_csv("inst/testdata/matlab_fill_gaps_output_llo_p1.csv") %>%
@@ -208,13 +209,13 @@ if (nrg > 1) {
     gather(-Date, key = "key", value = "value") %>%
     group_by(Date) %>%
     summarize(P_HRes = mean(value, na.rm = TRUE))
-  DateP_HRes <- Precp_Fill_Compiled$Date
-  P_HRes <- Precp_Fill_Compiled$P_HRes
 } else {
-  DateP_HRes <- PrecHRes[[1]]$Date
-  P_HRes <- PrecHRes[[1]]$NewP
+  Precp_Fill_Compiled <- PrecHRes[[1]]
 }
+DateP_HRes <- Precp_Fill_Compiled$Date
+P_HRes <- Precp_Fill_Compiled$P_HRes
 
+## Average discharge data to the maximum resolution
 q1 <- average(q1$Date, q1$Q, timescale)
 x <- q1 %>% full_join(x_fill) # Catchment object, essentially
 
@@ -240,13 +241,12 @@ x_hourly <-
     across(starts_with("Prec"), sum, na.rm = TRUE)
   )
 
-plot(x_daily$Date, x_daily$Q, type = "l", col = "blue")
-plot(x_hourly$Date, x_hourly$Q, type = "l", col = "magenta")
+## plot(x_daily$Date, x_daily$Q, type = "l", col = "blue")
+## plot(x_hourly$Date, x_hourly$Q, type = "l", col = "magenta")
 
 ## Up to this point:
 ## - what are the main plots needed?
 ## - what is the main output the user expects?
-##
 
 stop()
 
