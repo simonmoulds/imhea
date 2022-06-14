@@ -440,58 +440,33 @@ divide_events <- function(Event_Date, Event_mm, MaxT) {
 #' Aggregate rainfall data with cubic spline interpolation.
 #'
 #' @param x tsibble.
+#' @param timescale units.
 #' @param ... Additional arguments.
 #'
 #' @return tsibble
 #'
-aggregate <- function(x, ...) {
-  UseMethod("depure")
+aggregate <- function(x, timescale, ...) {
+  UseMethod("aggregate")
 }
 
 #' @export
-aggregate.stream_gauge <- function(x, ...) {
-  ## % iMHEA Agregation of hydrological data (average within an interval).
-  ## % [NewDate,NewQ,CumQ,VoidQ,MeanQ,MaxQ,MinQ] =
-  ## % iMHEA_Average(Date,Q,scale,flag) averages discharge data.
-  ## %
-  ## % Input:
-  ## % Date  = dd/mm/yyyy hh:mm:ss [date format].
-  ## % Q     = Stage or Discharge [l/s, m3/s, mm].
-  ## % scale = Agregation interval [min].
-  ## % flag  = leave empty NOT to run the data voids assessment and plots.
-  ## %
-  ## % Output:
-  ## % NewDate   = dd/mm/yyyy hh:mm:ss [date format] at specified interval.
-  ## % NewQ      = Average stage or discharge [l/s, m3/s, mm].
-  ## % CumQ      = Cumulative discharge [l/s, m3/s, mm].
-  ## % VoidP     = Void intervals [l/s, m3/s, mm].
-  ## % MeanQ     = Mean value for specified interval [l/s, m3/s, mm].
-  ## % MaxQ      = Maximum value for specified interval [l/s, m3/s, mm].
-  ## % MinQ      = Minimum value for specified interval [l/s, m3/s, mm].
-  ## Date = Date - seconds(0.25)
-  ## Voids = identify_voids(tibble(Date = Date, Event = Q))
-  ## Voids = identify_voids(Date, Q)
-  ## Q_units <- units(Q)
+aggregate.stream_gauge <- function(x, timescale, ...) {
+  ## Q_units <- units(x$Q)
   timescale_str <- paste0(as.numeric(set_units(timescale, "min")), " min")
-  DI = ceiling_date(min(x[[index_var(x)]]), unit = timescale_str) # Initial date
-  DF = ceiling_date(max(x[[index_var(x)]]), unit = timescale_str) # Final date
-  ## FIXME
-  x <- #tibble(Date = Date, Q = Q) %>%
+  ## DI = ceiling_date(min(x[[index_var(x)]]), unit = timescale_str)
+  ## DF = ceiling_date(max(x[[index_var(x)]]), unit = timescale_str)
+  x <-
     x %>%
-    ## as_tibble() %>%
-    mutate(Q = as.numeric(Q)) %>%
-    ## mutate(Date = ceiling_date(Date, unit = timescale_str)) %>%
-    ## group_by(Date) %>%
-    index_by(Date ~ ceiling_date(., unit = timescale_str)) %>% #
-    summarize(Q = mean(Q, na.rm = TRUE), Q_na = mean(Q)) %>%
-    mutate(Q = ifelse(is.na(Q_na), NA, Q)) %>%
-    dplyr::select(-Q_na)
-  ## x <- x %>%
-  ##   index_by(ceiling_date(Date, unit = timescale_str)) %>%
-  ##   summarize(Q = mean(Q, na.rm = TRUE), Q_na = mean(Q))
-  x <- x %>% as_tsibble(index = Date, regular = TRUE)
-  x <- x %>% tsibble::fill_gaps(.start = DI, .end = DF)
+    mutate(across(any_of(c("Q", "H")), as.numeric)) %>%
+    index_by(NewDate = ~ ceiling_date(., unit = timescale_str)) %>%
+    summarize(across(any_of(c("Q", "H")), mean)) %>%
+    rename(Date = NewDate)
+  x <- x %>% tsibble::fill_gaps(.full = TRUE) #, .start = DI, .end = DF)
   x <- x %>% mutate(Q = zoo::na.approx(Q, maxgap = 1))
-  x <- x %>% mutate(Q = set_units(Q, Q_units, mode = "standard"))
+  ## TODO get discharge/stage units from options
+  ## TODO pass x back to stream_gauge constructor
+  x <- x %>% mutate(Q = set_units(Q, m3/s))
+  if ("H" %in% names(x))
+    x <- x %>% mutate(H = set_units(H, m))
   x
 }

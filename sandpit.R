@@ -82,6 +82,7 @@ stream_gauge <- function(x,
                          raw = TRUE,
                          ...) {
 
+  ## TODO allow users to set standard measurement units in options
   stopifnot(date_column %in% names(x))
   stopifnot(discharge_column %in% names(x))
   stopifnot(is.na(level_column) | isTRUE(level_column %in% names(x)))
@@ -92,9 +93,13 @@ stream_gauge <- function(x,
     x <- x %>% rename(H = level_column) %>% dplyr::select(Date, Q, H, Flag)
   }
   x <- x %>% imhea_to_tsibble(date_column, ..., regular = FALSE)
-  x <- x %>% mutate(Q = set_units(Q, discharge_units, mode = "standard"))
+  x <- x %>%
+    mutate(Q = set_units(Q, discharge_units, mode = "standard")) %>%
+    mutate(Q = set_units(Q, m3/s))
   if ("H" %in% names(x))
-    x <- x %>% mutate(H = set_units(H, level_units, mode = "standard"))
+    x <- x %>%
+      mutate(H = set_units(H, level_units, mode = "standard")) %>%
+      mutate(H = set_units(H, m))
   class(x) <- c("stream_gauge", class(x))
   return(x)
 }
@@ -126,7 +131,7 @@ p2 <- p2_raw %>% tipping_bucket_rain_gauge(event_units = "mm")
 q1 <-
   q1_raw %>%
   stream_gauge(
-    discharge_units = "m^3/s",
+    discharge_units = "l/s",
     level_column = "Level cm",
     level_units = "cm"
   )
