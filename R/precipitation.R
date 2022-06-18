@@ -78,8 +78,6 @@ rain_gauge_network <- function(...,
   n_gauges = length(dots)
 }
 
-
-
 compute_bias <- function(y, x1m, r1m) {
   ## y is cumulative rainfall, so rev(y)[1] is the total rainfall during the event
   ## r1m <- set_units(r1m, mm/minute)
@@ -90,7 +88,7 @@ compute_bias <- function(y, x1m, r1m) {
   bias
 }
 
-correct_bias <- function(x, y, x1m, r1m) {
+correct_bias <- function(x, y, x1m, r1m, halves) {
   ## Use linear interpolation instead
   y2m <- approx(x, y, x1m, rule=1)$y
   y2m <- y2m %>% set_units(mm)

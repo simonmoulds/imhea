@@ -17,5 +17,5 @@ aggregate(x, timescale, ...)
 tsibble
 }
 \description{
-Aggregate rainfall data with cubic spline interpolation.
+Temporal aggregation of hydrological time series data.
 }

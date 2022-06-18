@@ -217,7 +217,7 @@ aggregation_cs <- function(x,
       bias = compute_bias(y, x1m, r1m)
       bEvent = bias > 0.25
       if (bEvent) {
-        y2m = correct_bias(x, y, x1m, r1m)
+        y2m = correct_bias(x, y, x1m, r1m, halves)
         r2m = compute_rainfall_intensity(y2m)
         bias = compute_bias(y, x1m, r2m)
       }
@@ -437,7 +437,7 @@ divide_events <- function(Event_Date, Event_mm, MaxT) {
 
 #' Aggregate data
 #'
-#' Aggregate rainfall data with cubic spline interpolation.
+#' Temporal aggregation of hydrological time series data.
 #'
 #' @param x tsibble.
 #' @param timescale units.
@@ -451,17 +451,14 @@ aggregate <- function(x, timescale, ...) {
 
 #' @export
 aggregate.stream_gauge <- function(x, timescale, ...) {
-  ## Q_units <- units(x$Q)
   timescale_str <- paste0(as.numeric(set_units(timescale, "min")), " min")
-  ## DI = ceiling_date(min(x[[index_var(x)]]), unit = timescale_str)
-  ## DF = ceiling_date(max(x[[index_var(x)]]), unit = timescale_str)
   x <-
     x %>%
     mutate(across(any_of(c("Q", "H")), as.numeric)) %>%
     index_by(NewDate = ~ ceiling_date(., unit = timescale_str)) %>%
     summarize(across(any_of(c("Q", "H")), mean)) %>%
     rename(Date = NewDate)
-  x <- x %>% tsibble::fill_gaps(.full = TRUE) #, .start = DI, .end = DF)
+  x <- x %>% tsibble::fill_gaps(.full = TRUE)
   x <- x %>% mutate(Q = zoo::na.approx(Q, maxgap = 1))
   ## TODO get discharge/stage units from options
   ## TODO pass x back to stream_gauge constructor

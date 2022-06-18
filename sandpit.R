@@ -141,21 +141,8 @@ q1 <-
 ## Determine discharge interval
 ## Note int_length(int_diff(...)) always returns seconds
 int_HRes <- median(int_length(int_diff(q1[[index(q1)]])))
-## Number of intervals per day
-## nd <- 86400 / int_HRes
-## p1 <- p1 %>% aggregation_cs() # TODO
-## p2 <- p2 %>% aggregation_cs() # TODO
+timescale <- set_units(int_HRes, "s")
 
-## Test some of the functions called within aggregation_cs(...)
-## Setup [from aggregation_cs(...)]
-x <- p1
-timescale <- set_units(60 * 5, "s")
-## timescale <- set_units(60, "s")
-bucket <- set_units(0.2, "mm")
-mintip <- TRUE
-halves <- TRUE
-
-## This works, but using Matlab output directly for testing
 x1 <- aggregation_cs(p1, timescale = timescale)
 x2 <- aggregation_cs(p2, timescale = timescale)
 
@@ -176,8 +163,8 @@ x2 <- aggregation_cs(p2, timescale = timescale)
 ##   mutate(Date = round_date(Date, unit = "0.25 seconds")) %>%
 ##   mutate(Date = force_tz(Date, "Etc/GMT-5"))
 
-## ## This works (at least the parts that I've tested)
-## x_fill <- fill_gaps(x1$Date, x1$NewP, x2$Date, x2$NewP)
+## This works (at least the parts that I've tested)
+x_fill <- fill_gaps(x1$Date, x1$NewP, x2$Date, x2$NewP)
 
 ## x_matlab_fill_gaps_output <-
 ##   read_csv("inst/testdata/matlab_fill_gaps_output_llo_p1.csv") %>%
@@ -220,8 +207,11 @@ if (nrg > 1) {
 DateP_HRes <- Precp_Fill_Compiled$Date
 P_HRes <- Precp_Fill_Compiled$P_HRes
 
+stop()
+
 ## Average discharge data to the maximum resolution
-q1 <- average(q1$Date, q1$Q, timescale)
+q1 <- aggregate(q1, timescale = timescale)
+## q1 <- average(q1$Date, q1$Q, timescale)
 x <- q1 %>% full_join(x_fill) # Catchment object, essentially
 
 x_daily <-
