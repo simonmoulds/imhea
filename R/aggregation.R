@@ -465,5 +465,77 @@ aggregate.stream_gauge <- function(x, timescale, ...) {
   x <- x %>% mutate(Q = set_units(Q, m3/s))
   if ("H" %in% names(x))
     x <- x %>% mutate(H = set_units(H, m))
+  ## TODO pass back to the constructor
+  ## TODO separate class for stage?
+  class(x) <- c("stream_gauge", class(x))
   x
+}
+
+## #' export
+## aggregate.rain_gauge <- function(x, timescale, ...)
+aggregation <- function(Date, P, timescale, ...) {
+  ## Agregation of rainfall within an interval
+  ##
+  ## Input:
+  ## Date  = dd/mm/yyyy hh:mm:ss [date format].
+  ## P     = Precipitation [mm].
+  ## scale = Agregation interval [min].
+  ## flag  = leave empty NOT to run the data voids assessment and plots.
+  ##
+  ## Output:
+  ## NewDate   = dd/mm/yyyy hh:mm:ss [date format] at specified interval.
+  ## NewP      = Agregated Precipitation [mm].
+  ## CumP      = Cumulative rainfall [mm].
+  ## VoidP     = Void intervals [mm].
+  ## MaxP      = Maximum intensity for specified interval [mm].
+  Date = Date - seconds(0.25)
+  Voids = identify_voids(tibble(Date = Date, Event = P))
+  DI = ceiling_date(min(Date)) # Initial date
+  DF = ceiling_date(max(Date)) # Final date
+  NewDate = seq(DI, DF, by = paste0(timescale, " min"))
+  n = length(NewDate) # Number of intervals
+  NewP = rep(0, length(NewDate)) # Initialize aggregation
+  zero_ix <- (P == 0) | is.na(P)
+  Date = Date[!zero_ix]
+  P = P[!zero_ix]
+  k = length(P) # Length of input data
+  ## Set initial counter
+  if (Date[1] == NewDate[1]) {
+    j = 2
+    NewP[1] = P[1]
+  } else {
+    j = 1
+  }
+  for (i in j:n) {
+    ## Aggregate values
+    ## while j<=k && nd*Date(j)<=NewDate(i) % && nd*Date(j)>NewDate(i-1)
+    while ((j <= k) && (Date[j] <= NewDate[i])) {
+      NewP[i] = NewP[i] + P[j]
+      j = j + 1
+    }
+  }
+  ## Fill gaps between data when there is only one value missing
+  for (i in 2:(n-1)) {
+    if (is.na(NewP[i])) {
+      NewP[i] = 0
+    }
+  }
+  CumP <- cumsum(NewP)
+  ## Placing data gaps again in the aggregated vectors
+  VoidP <- NewP
+  ## Incorporate data voids
+  for (i in 1:nrow(Voids)) {
+    idx = NewDate > Voids[i,1] & NewDate < Voids[i,2]
+    CumP[idx] = NA
+    NewP[idx] = NA
+  }
+  VoidP[!is.na(NewP)] <- NA
+  ## Correct the last row
+  if (rev(NewP)[1] == 0 && (is.na(rev(NewP)[2]))) {
+    VoidP[length(VoidP)] <- NewP[length(NewP)]
+    NewP[length(NewP)] <- NA
+    CumP[length(NewP)] <- NA
+  }
+  ## MaxP <- max(NewP, na.rm = TRUE) # Maximum intensity
+  tibble(Date = NewDate, Prec = NewP, CumP = CumP)
 }

@@ -163,6 +163,8 @@ x2 <- aggregation_cs(p2, timescale = timescale)
 ##   mutate(Date = round_date(Date, unit = "0.25 seconds")) %>%
 ##   mutate(Date = force_tz(Date, "Etc/GMT-5"))
 
+stop()
+
 ## This works (at least the parts that I've tested)
 x_fill <- fill_gaps(x1$Date, x1$NewP, x2$Date, x2$NewP)
 
@@ -178,39 +180,11 @@ x_fill <- fill_gaps(x1$Date, x1$NewP, x2$Date, x2$NewP)
 ## lines(cumsum(x_fill$Prec1), col = "magenta")
 ## plot(cumsum(x_matlab_fill_gaps_output$P2), type = "l", col = "blue")
 ## lines(cumsum(x_fill$Prec2), col = "magenta")
-
-## TODO make this a part of a catchment object
-## FIXME this is not currently used?
-PrecHRes <- list(x1, x2)
-nrg <- 2
-if (nrg > 1) {
-  ## Fill precipitation gaps between all combinations of rain gauges
-  combinations <- combn(1:nrg, 2)
-  combn_index <- dim(combinations)[2]
-  PrecHResFill <- list()
-  for (i in 1:combn_index) {
-    a <- x1
-    b <- x2
-    PrecHResFill[[i]] <-
-      fill_gaps(a$Date, a$NewP, b$Date, b$NewP) %>%
-      setNames(c("Date", paste0("P1_", i), paste0("P2_", i)))
-  }
-  myfun <- function(x, y, ...) full_join(x, y, by = "Date")
-  Precp_Fill_Compiled <-
-    Reduce(myfun, PrecHResFill) %>%
-    gather(-Date, key = "key", value = "value") %>%
-    group_by(Date) %>%
-    summarize(P_HRes = mean(value, na.rm = TRUE))
-} else {
-  Precp_Fill_Compiled <- PrecHRes[[1]]
-}
-DateP_HRes <- Precp_Fill_Compiled$Date
-P_HRes <- Precp_Fill_Compiled$P_HRes
-
 stop()
 
 ## Average discharge data to the maximum resolution
 q1 <- aggregate(q1, timescale = timescale)
+
 ## q1 <- average(q1$Date, q1$Q, timescale)
 x <- q1 %>% full_join(x_fill) # Catchment object, essentially
 
