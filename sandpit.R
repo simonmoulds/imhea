@@ -168,6 +168,9 @@ stop()
 ## This works (at least the parts that I've tested)
 x_fill <- fill_gaps(x1$Date, x1$NewP, x2$Date, x2$NewP)
 
+## Testing aggregation functions
+y <- aggregation(x1$Date, as.numeric(x1$NewP), timescale)
+
 ## x_matlab_fill_gaps_output <-
 ##   read_csv("inst/testdata/matlab_fill_gaps_output_llo_p1.csv") %>%
 ##   setNames(c("Date", "P1", "P2")) %>%

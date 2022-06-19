@@ -524,18 +524,20 @@ aggregation <- function(Date, P, timescale, ...) {
   ## Placing data gaps again in the aggregated vectors
   VoidP <- NewP
   ## Incorporate data voids
-  for (i in 1:nrow(Voids)) {
-    idx = NewDate > Voids[i,1] & NewDate < Voids[i,2]
-    CumP[idx] = NA
-    NewP[idx] = NA
+  if (nrow(Voids) > 0) {
+    for (i in 1:nrow(Voids)) {
+      idx = NewDate > Voids[i,1] & NewDate < Voids[i,2]
+      CumP[idx] = NA
+      NewP[idx] = NA
+    }
   }
-  VoidP[!is.na(NewP)] <- NA
-  ## Correct the last row
-  if (rev(NewP)[1] == 0 && (is.na(rev(NewP)[2]))) {
-    VoidP[length(VoidP)] <- NewP[length(NewP)]
-    NewP[length(NewP)] <- NA
-    CumP[length(NewP)] <- NA
-  }
+  ## VoidP[!is.na(NewP)] <- NA
+  ## ## Correct the last row
+  ## if (rev(NewP)[1] == 0 && (is.na(rev(NewP)[2]))) {
+  ##   VoidP[length(VoidP)] <- NewP[length(NewP)]
+  ##   NewP[length(NewP)] <- NA
+  ##   CumP[length(NewP)] <- NA
+  ## }
   ## MaxP <- max(NewP, na.rm = TRUE) # Maximum intensity
   tibble(Date = NewDate, Prec = NewP, CumP = CumP)
 }
