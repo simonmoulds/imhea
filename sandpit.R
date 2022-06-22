@@ -33,18 +33,23 @@ imhea_to_tsibble <- function(x,
                              ...) {
   stopifnot(date_column %in% names(x))
   stopifnot(tz %in% valid_timezones())
-  x =
+  x <- x %>% rename(Date = date_column)
+  if (is.character(x$Date))
+    x <-
+      x %>%
+      mutate(Date = as.POSIXct(Date, tz = tz, format = date_format))
+
+  x <-
     x %>%
-    rename(Date = date_column) %>%
-    mutate(Date = as.POSIXct(Date, tz = tz, format = date_format)) %>%
     arrange(Date) %>%
-    rowid_to_column() %>%
-    as_tsibble(key = rowid, index = Date, regular = regular)
+    filter(!are_duplicated(., key = ID, index = Date)) %>%
+    as_tsibble(key = ID, index = Date, regular = regular)
   x
 }
 
 ## S3 class
 tipping_bucket_rain_gauge <- function(x,
+                                      id,
                                       date_column = "Date",
                                       date_format = "%d/%m/%Y %H:%M:%S",
                                       tz = "Etc/GMT-5",
@@ -54,25 +59,32 @@ tipping_bucket_rain_gauge <- function(x,
                                       raw = TRUE,
                                       ...) {
 
+  ## TODO assume that flags will be handled appropriately as a pre-processing step
   stopifnot(date_column %in% names(x))
   stopifnot(event_column %in% names(x))
   stopifnot(!missing(event_units))
-  x <- x %>% rename(Date = date_column, Event = event_column)
-  x <- x %>% imhea_to_tsibble(date_column, ..., regular = FALSE)
-  ## TODO depure should not return p1 with a new column 'Interval'
-  x <- x %>% depure()
-  x <- x %>% mutate(Event = set_units(Event, event_units, mode = "standard"))
+  x <- x %>%
+    rename(Date = date_column, Event = event_column) %>%
+    dplyr::select(Date, Event) %>%
+    mutate(ID = id, .before = "Date")
+
+  x <- x %>%
+    imhea_to_tsibble(date_column, date_format, tz, regular = FALSE)
+  x <- x %>% depure() %>% dplyr::select(-Interval)
+  x <- x %>%
+    mutate(Event = set_units(Event, event_units, mode = "standard")) %>%
+    mutate(Event = set_units(Event, mm))
   if (!raw) {
     class(x) <- c("tipping_bucket_rain_gauge", class(x))
     return(x)
   }
-  ## TODO
   class(x) <- c("tipping_bucket_rain_gauge", class(x))
   return(x)
 }
 
 ## S3 class
 stream_gauge <- function(x,
+                         id,
                          date_column = "Date",
                          discharge_column = "Flow l/s",
                          discharge_units,
@@ -86,13 +98,16 @@ stream_gauge <- function(x,
   stopifnot(date_column %in% names(x))
   stopifnot(discharge_column %in% names(x))
   stopifnot(is.na(level_column) | isTRUE(level_column %in% names(x)))
-  x <- x %>% rename(Date = date_column, Q = discharge_column, Flag = flag_column)
+
+  x <- x %>% rename(Date = date_column, Q = discharge_column) #, Flag = flag_column)
   if (is.na(level_column)) {
-    x <- x %>% dplyr::select(Date, Q, Flag)
+    x <- x %>% dplyr::select(Date, Q) #, Flag)
   } else {
-    x <- x %>% rename(H = level_column) %>% dplyr::select(Date, Q, H, Flag)
+    x <- x %>% rename(H = level_column) %>% dplyr::select(Date, Q, H) #, Flag)
   }
-  x <- x %>% imhea_to_tsibble(date_column, ..., regular = FALSE)
+  x <- x %>% mutate(ID = id, .before = "Date")
+  x <- x %>%
+    imhea_to_tsibble(date_column, ..., regular = FALSE)
   x <- x %>%
     mutate(Q = set_units(Q, discharge_units, mode = "standard")) %>%
     mutate(Q = set_units(Q, m3/s))
@@ -125,12 +140,13 @@ p2_raw = read_csv(
 
 ## Do some initial data preparation
 ## TODO Call aggregation_cs from within constructor?
-p1 <- p1_raw %>% tipping_bucket_rain_gauge(event_units = "mm")
-p2 <- p2_raw %>% tipping_bucket_rain_gauge(event_units = "mm")
+p1 <- p1_raw %>% tipping_bucket_rain_gauge(id = "LLO_01_P0_01", event_units = "mm")
+p2 <- p2_raw %>% tipping_bucket_rain_gauge(id = "LLO_01_P0_02", event_units = "mm")
 
 q1 <-
   q1_raw %>%
   stream_gauge(
+    id = "LLO_01_HI_01",
     discharge_units = "l/s",
     level_column = "Level cm",
     level_units = "cm"
@@ -143,8 +159,10 @@ q1 <-
 int_HRes <- median(int_length(int_diff(q1[[index(q1)]])))
 timescale <- set_units(int_HRes, "s")
 
-x1 <- aggregation_cs(p1, timescale = timescale)
-x2 <- aggregation_cs(p2, timescale = timescale)
+p1 <- aggregation_cs(p1, timescale = timescale)
+p2 <- aggregation_cs(p2, timescale = timescale)
+p_merged <- infill_precip(p1, p2, new_id = "LLO_01_P0_merged")
+q1 <- aggregate(q1, timescale = timescale)
 
 ## ## Matlab iMHEA_AggregationCS(...) output
 ## x1 <-
@@ -163,13 +181,11 @@ x2 <- aggregation_cs(p2, timescale = timescale)
 ##   mutate(Date = round_date(Date, unit = "0.25 seconds")) %>%
 ##   mutate(Date = force_tz(Date, "Etc/GMT-5"))
 
-stop()
-
-## This works (at least the parts that I've tested)
-x_fill <- fill_gaps(x1$Date, x1$NewP, x2$Date, x2$NewP)
+## ## This works (at least the parts that I've tested)
+## x_fill <- fill_gaps(x1$Date, x1$NewP, x2$Date, x2$NewP)
 
 ## Testing aggregation functions
-y <- aggregation(x1$Date, as.numeric(x1$NewP), timescale)
+## y <- aggregation(p1$Date, as.numeric(p1$NewP), timescale)
 
 ## x_matlab_fill_gaps_output <-
 ##   read_csv("inst/testdata/matlab_fill_gaps_output_llo_p1.csv") %>%
@@ -183,44 +199,20 @@ y <- aggregation(x1$Date, as.numeric(x1$NewP), timescale)
 ## lines(cumsum(x_fill$Prec1), col = "magenta")
 ## plot(cumsum(x_matlab_fill_gaps_output$P2), type = "l", col = "blue")
 ## lines(cumsum(x_fill$Prec2), col = "magenta")
-stop()
 
-## Average discharge data to the maximum resolution
-q1 <- aggregate(q1, timescale = timescale)
 
 ## q1 <- average(q1$Date, q1$Q, timescale)
-x <- q1 %>% full_join(x_fill) # Catchment object, essentially
+## p_combined <- p_combined %>% rename(P = Event) %>% dplyr::select(-Event)
 
-x_daily <-
-  x %>%
-  as_tibble() %>%
-  mutate(Date = ceiling_date(Date, unit = "1 day")) %>%
-  group_by(Date) %>%
-  summarize(
-    n = sum(is.na(Q)),
-    Q = mean(Q),
-    across(starts_with("Prec"), sum, na.rm = TRUE)
-  )
+x <- catchment(q1, p1, p2, id = "LLO_01")
+x_daily <- x %>% aggregate_daily()
+x_hourly <- x %>% aggregate_hourly()
 
-x_hourly <-
-  x %>%
-  as_tibble() %>%
-  mutate(Date = ceiling_date(Date, unit = "1 hour")) %>%
-  group_by(Date) %>%
-  summarize(
-    n = sum(is.na(Q)),
-    Q = mean(Q),
-    across(starts_with("Prec"), sum, na.rm = TRUE)
-  )
-
-## plot(x_daily$Date, x_daily$Q, type = "l", col = "blue")
-## plot(x_hourly$Date, x_hourly$Q, type = "l", col = "magenta")
+stop()
 
 ## Up to this point:
 ## - what are the main plots needed?
 ## - what is the main output the user expects?
-
-stop()
 
 ## Baseflow
 Q = x_daily$Q

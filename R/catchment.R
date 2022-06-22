@@ -2,9 +2,9 @@
 #'
 #' Create iMHEA catchment object.
 #'
-#' @param area Numeric. Catchment area [km2]
-#' @param discharge
-#' @param precipitation
+#' @param q stream_gauge
+#' @param ... rain_gauge objects.
+#' @param id character.
 #'
 #' @return A catchment object
 #'
@@ -12,25 +12,42 @@
 #' \dontrun{
 #' sum(1:10)
 #' }
-catchment <- function(area, discharge, precipitation) {
-  NULL
+catchment <- function(q, ..., id) {
+  ## TODO include additional metadata
+  ## gauges <- list(...)
+  p_merged <- infill_precip(..., new_id = id)
+  ## q <- aggregate(q, timescale = timescale)
+  p_merged <- p_merged %>%
+    mutate(ID_new = id, .before = ID) %>%
+    update_tsibble(key = ID_new) %>%
+    dplyr::select(-ID) %>%
+    rename(ID = ID_new)
+  q <- q %>%
+    mutate(ID_new = id, .before = ID) %>%
+    update_tsibble(key = ID_new) %>%
+    dplyr::select(-ID) %>%
+    rename(ID = ID_new)
+  x <- q %>% full_join(p_merged, by = c("ID", "Date"))
+  class(x) <- c("catchment", class(x))
+  x
 }
 
-infill_precip <- function(...) {
+#' @export
+infill_precip <- function(..., new_id) {
   ## TODO make this a part of a catchment object
   ## FIXME this is not currently used?
-  PrecHRes <- list(x1, x2)
-  nrg <- 2
+  PrecHRes <- list(...)
+  nrg <- length(PrecHRes)
   if (nrg > 1) {
     ## Fill precipitation gaps between all combinations of rain gauges
     combinations <- combn(1:nrg, 2)
     combn_index <- dim(combinations)[2]
     PrecHResFill <- list()
     for (i in 1:combn_index) {
-      a <- x1
-      b <- x2
+      a <- PrecHRes[[combinations[1,i]]]
+      b <- PrecHRes[[combinations[2,i]]]
       PrecHResFill[[i]] <-
-        fill_gaps(a$Date, a$NewP, b$Date, b$NewP) %>%
+        fill_gaps(a$Date, a$Event, b$Date, b$Event) %>%
         setNames(c("Date", paste0("P1_", i), paste0("P2_", i)))
     }
     myfun <- function(x, y, ...) full_join(x, y, by = "Date")
@@ -44,7 +61,10 @@ infill_precip <- function(...) {
   }
   DateP_HRes <- Precp_Fill_Compiled$Date
   P_HRes <- Precp_Fill_Compiled$P_HRes
+  out <- tibble(Date = DateP_HRes, Event = P_HRes)
+  out <- tipping_bucket_rain_gauge(out, id = new_id, date_column = "Date", event_column = "Event", event_units = "mm")
 }
+
 #' Aggregate rainfall data
 #'
 #' Aggregate rainfall data with cubic spline interpolation.

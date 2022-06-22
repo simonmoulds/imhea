@@ -4,12 +4,14 @@
 \alias{catchment}
 \title{Create catchment object}
 \usage{
-catchment(area, discharge, precipitation)
+catchment(q, ..., id)
 }
 \arguments{
-\item{area}{Numeric. Catchment area \link{km2}}
+\item{q}{stream_gauge}
 
-\item{precipitation}{}
+\item{...}{rain_gauge objects.}
+
+\item{id}{character.}
 }
 \value{
 A catchment object

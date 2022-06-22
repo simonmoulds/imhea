@@ -18,6 +18,12 @@ aggregation_cs <- function(x,
                            mintip = TRUE,
                            halves = TRUE,
                            ...) {
+  ## TODO can we handle the case where there is more than one key variable
+  keys <- key_data(x)
+  if (nrow(keys) > 1)
+    stop("More than one key not currently supported")
+  id <- keys[1, 1, drop=TRUE]
+
   Event_Date <- x[["Date"]]
   Event_mm <- x[["Event"]]
   event_units <- units(Event_mm)
@@ -327,8 +333,17 @@ aggregation_cs <- function(x,
   }
   cat(sprintf('Rainfall volume before aggregation: %8.2f mm.\n', sum(Event_mm, na.rm = TRUE)))
   cat(sprintf('Rainfall volume after aggregation: %8.2f mm.\n', sum(NewP, na.rm = TRUE)))
-  out <- tibble(Date = NewDate, NewP=NewP, CumP=CumP, Single=Single)
-  out <- out %>% filter(NewDate >= DI & NewDate <= DF)
+  ## out <- tibble(Date = NewDate, NewP=NewP, CumP=CumP, Single=Single)
+  out <- tibble(Date = NewDate, Event = NewP, CumP = CumP, Single = Single)
+  out <- out %>%
+    filter(NewDate >= DI & NewDate <= DF)
+  out <- tipping_bucket_rain_gauge(
+    out,
+    id,
+    date_column = "Date",
+    event_column = "Event",
+    event_units = "mm"
+  )
   ## out <- out %>% mutate(NewP = set_units(NewP, event_units, mm)
   out
 }
@@ -455,6 +470,7 @@ aggregate.stream_gauge <- function(x, timescale, ...) {
   x <-
     x %>%
     mutate(across(any_of(c("Q", "H")), as.numeric)) %>%
+    group_by_key() %>%
     index_by(NewDate = ~ ceiling_date(., unit = timescale_str)) %>%
     summarize(across(any_of(c("Q", "H")), mean)) %>%
     rename(Date = NewDate)
@@ -471,73 +487,160 @@ aggregate.stream_gauge <- function(x, timescale, ...) {
   x
 }
 
-## #' export
-## aggregate.rain_gauge <- function(x, timescale, ...)
-aggregation <- function(Date, P, timescale, ...) {
-  ## Agregation of rainfall within an interval
-  ##
-  ## Input:
-  ## Date  = dd/mm/yyyy hh:mm:ss [date format].
-  ## P     = Precipitation [mm].
-  ## scale = Agregation interval [min].
-  ## flag  = leave empty NOT to run the data voids assessment and plots.
-  ##
-  ## Output:
-  ## NewDate   = dd/mm/yyyy hh:mm:ss [date format] at specified interval.
-  ## NewP      = Agregated Precipitation [mm].
-  ## CumP      = Cumulative rainfall [mm].
-  ## VoidP     = Void intervals [mm].
-  ## MaxP      = Maximum intensity for specified interval [mm].
-  Date = Date - seconds(0.25)
-  Voids = identify_voids(tibble(Date = Date, Event = P))
-  DI = ceiling_date(min(Date)) # Initial date
-  DF = ceiling_date(max(Date)) # Final date
-  NewDate = seq(DI, DF, by = paste0(timescale, " min"))
-  n = length(NewDate) # Number of intervals
-  NewP = rep(0, length(NewDate)) # Initialize aggregation
-  zero_ix <- (P == 0) | is.na(P)
-  Date = Date[!zero_ix]
-  P = P[!zero_ix]
-  k = length(P) # Length of input data
-  ## Set initial counter
-  if (Date[1] == NewDate[1]) {
-    j = 2
-    NewP[1] = P[1]
-  } else {
-    j = 1
-  }
-  for (i in j:n) {
-    ## Aggregate values
-    ## while j<=k && nd*Date(j)<=NewDate(i) % && nd*Date(j)>NewDate(i-1)
-    while ((j <= k) && (Date[j] <= NewDate[i])) {
-      NewP[i] = NewP[i] + P[j]
-      j = j + 1
-    }
-  }
-  ## Fill gaps between data when there is only one value missing
-  for (i in 2:(n-1)) {
-    if (is.na(NewP[i])) {
-      NewP[i] = 0
-    }
-  }
-  CumP <- cumsum(NewP)
-  ## Placing data gaps again in the aggregated vectors
-  VoidP <- NewP
-  ## Incorporate data voids
-  if (nrow(Voids) > 0) {
-    for (i in 1:nrow(Voids)) {
-      idx = NewDate > Voids[i,1] & NewDate < Voids[i,2]
-      CumP[idx] = NA
-      NewP[idx] = NA
-    }
-  }
-  ## VoidP[!is.na(NewP)] <- NA
-  ## ## Correct the last row
-  ## if (rev(NewP)[1] == 0 && (is.na(rev(NewP)[2]))) {
-  ##   VoidP[length(VoidP)] <- NewP[length(NewP)]
-  ##   NewP[length(NewP)] <- NA
-  ##   CumP[length(NewP)] <- NA
-  ## }
-  ## MaxP <- max(NewP, na.rm = TRUE) # Maximum intensity
-  tibble(Date = NewDate, Prec = NewP, CumP = CumP)
+#' @export
+aggregate.rain_gauge <- function(x, timescale, ...) {
+  timescale_str <- paste0(as.numeric(set_units(timescale, "min")), " min")
+  x <-
+    x %>%
+    mutate(across(any_of(c("Event")), as.numeric)) %>%
+    group_by_key() %>%
+    index_by(NewDate = ~ ceiling_date(., unit = timescale_str)) %>%
+    summarize(across(any_of(c("Event")), sum)) %>%
+    rename(Date = NewDate)
+  x <- x %>% tsibble::fill_gaps(.full = TRUE)
+  ## x <- x %>% mutate(Event = zoo::na.approx(Event, maxgap = 1))
+  ## TODO fill with zeroes where NA, maxgap = 1
+  ## x <- x %>% mutate(Event = set_units(Event, mm))
+  ## x <- tipping_bucket_rain_gauge(
+  ##   x, date_column = "Date", event_column = "Event", event_units = "mm"
+  ## )
+  ## class(x) <- c("rain_gauge", class(x))
+  class(x) <- c("tipping_bucket_rain_gauge", class(x))
+  x
 }
+
+#' Daily aggregation
+#'
+#' Convenience function to aggregate catchment data to daily temporal
+#' resolution.
+#'
+#' @param x tsibble.
+#' @param ... Additional arguments.
+#'
+#' @return tsibble
+#'
+aggregate_daily <- function(x, ...) {
+  UseMethod("aggregate_daily")
+}
+
+#' @export
+aggregate_daily.catchment <- function(x, ...) {
+  x_daily <-
+    x %>%
+    mutate(across(any_of(c("Q", "H", "Event")), as.numeric)) %>%
+    group_by_key() %>%
+    index_by(NewDate = ~ as_date(.)) %>%
+    summarize(
+      n = sum(is.na(Q)),
+      Q = mean(Q),
+      H = mean(H),
+      Event = sum(Event, na.rm = TRUE)
+    ) %>%
+    rename(Date = NewDate)
+  class(x_daily) <- c("catchment", class(x))
+  x_daily
+}
+
+#' Hourly aggregation
+#'
+#' Convenience function to aggregate catchment data to hourly temporal
+#' resolution.
+#'
+#' @param x tsibble.
+#' @param ... Additional arguments.
+#'
+#' @return tsibble
+#'
+aggregate_hourly <- function(x, ...) {
+  UseMethod("aggregate_hourly")
+}
+
+#' @export
+aggregate_hourly.catchment <- function(x, ...) {
+  x_hourly <-
+    x %>%
+    mutate(across(any_of(c("Q", "H", "Event")), as.numeric)) %>%
+    group_by_key() %>%
+    index_by(NewDate = ~ ceiling_date(., unit = "1 hour")) %>%
+    summarize(
+      n = sum(is.na(Q)),
+      Q = mean(Q),
+      H = mean(H),
+      Event = sum(Event, na.rm = TRUE)
+    ) %>%
+    rename(Date = NewDate)
+  class(x_hourly) <- c("catchment", class(x))
+  x_hourly
+}
+
+## ## #' export
+## ## aggregate.rain_gauge <- function(x, timescale, ...)
+## aggregation <- function(Date, P, timescale, ...) {
+##   ## Agregation of rainfall within an interval
+##   ##
+##   ## Input:
+##   ## Date  = dd/mm/yyyy hh:mm:ss [date format].
+##   ## P     = Precipitation [mm].
+##   ## scale = Agregation interval [min].
+##   ## flag  = leave empty NOT to run the data voids assessment and plots.
+##   ##
+##   ## Output:
+##   ## NewDate   = dd/mm/yyyy hh:mm:ss [date format] at specified interval.
+##   ## NewP      = Agregated Precipitation [mm].
+##   ## CumP      = Cumulative rainfall [mm].
+##   ## VoidP     = Void intervals [mm].
+##   ## MaxP      = Maximum intensity for specified interval [mm].
+##   Date = Date - seconds(0.25)
+##   Voids = identify_voids(tibble(Date = Date, Event = P))
+##   DI = ceiling_date(min(Date)) # Initial date
+##   DF = ceiling_date(max(Date)) # Final date
+##   timescale_str <- paste0(as.numeric(set_units(timescale, "min")), " min")
+##   NewDate = seq(DI, DF, by = timescale_str)
+##   n = length(NewDate) # Number of intervals
+##   NewP = rep(0, length(NewDate)) # Initialize aggregation
+##   zero_ix <- (P == 0) | is.na(P)
+##   Date = Date[!zero_ix]
+##   P = P[!zero_ix]
+##   k = length(P) # Length of input data
+##   ## Set initial counter
+##   if (Date[1] == NewDate[1]) {
+##     j = 2
+##     NewP[1] = P[1]
+##   } else {
+##     j = 1
+##   }
+##   for (i in j:n) {
+##     ## Aggregate values
+##     ## while j<=k && nd*Date(j)<=NewDate(i) % && nd*Date(j)>NewDate(i-1)
+##     while ((j <= k) && (Date[j] <= NewDate[i])) {
+##       NewP[i] = NewP[i] + P[j]
+##       j = j + 1
+##     }
+##   }
+##   ## Fill gaps between data when there is only one value missing
+##   for (i in 2:(n-1)) {
+##     if (is.na(NewP[i])) {
+##       NewP[i] = 0
+##     }
+##   }
+##   CumP <- cumsum(NewP)
+##   ## Placing data gaps again in the aggregated vectors
+##   VoidP <- NewP
+##   ## Incorporate data voids
+##   if (nrow(Voids) > 0) {
+##     for (i in 1:nrow(Voids)) {
+##       idx = NewDate > Voids[i,1] & NewDate < Voids[i,2]
+##       CumP[idx] = NA
+##       NewP[idx] = NA
+##     }
+##   }
+##   ## VoidP[!is.na(NewP)] <- NA
+##   ## ## Correct the last row
+##   ## if (rev(NewP)[1] == 0 && (is.na(rev(NewP)[2]))) {
+##   ##   VoidP[length(VoidP)] <- NewP[length(NewP)]
+##   ##   NewP[length(NewP)] <- NA
+##   ##   CumP[length(NewP)] <- NA
+##   ## }
+##   ## MaxP <- max(NewP, na.rm = TRUE) # Maximum intensity
+##   tibble(Date = NewDate, Prec = NewP, CumP = CumP)
+## }
