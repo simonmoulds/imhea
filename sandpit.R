@@ -204,9 +204,24 @@ q1 <- aggregate(q1, timescale = timescale)
 ## q1 <- average(q1$Date, q1$Q, timescale)
 ## p_combined <- p_combined %>% rename(P = Event) %>% dplyr::select(-Event)
 
-x <- catchment(q1, p1, p2, id = "LLO_01")
+catchment_id <- "LLO_01"
+catchment_area <-
+  iMHEA_Catchment_AREA %>%
+  filter(Catchment %in% catchment_id) %>%
+  `[`(, 2, drop=T)
+x <- catchment(
+  q1, p1, p2, id = catchment_id,
+  area = set_units(catchment_area, km^2)
+)
 x_daily <- x %>% aggregate_daily()
 x_hourly <- x %>% aggregate_hourly()
+
+
+
+## TODO Baseflow
+## [see how this fits into the overall computation of indices]
+
+
 
 stop()
 

@@ -5,6 +5,7 @@
 #' @param q stream_gauge
 #' @param ... rain_gauge objects.
 #' @param id character.
+#' @param area units
 #'
 #' @return A catchment object
 #'
@@ -12,7 +13,8 @@
 #' \dontrun{
 #' sum(1:10)
 #' }
-catchment <- function(q, ..., id) {
+catchment <- function(q, ..., id, area) {
+  stopifnot(inherits(area, "units"))
   ## TODO include additional metadata
   ## gauges <- list(...)
   p_merged <- infill_precip(..., new_id = id)
@@ -29,6 +31,7 @@ catchment <- function(q, ..., id) {
     rename(ID = ID_new)
   x <- q %>% full_join(p_merged, by = c("ID", "Date"))
   class(x) <- c("catchment", class(x))
+  attr(x, "area") <- set_units(area, km^2)
   x
 }
 

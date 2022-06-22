@@ -2,8 +2,7 @@
 #'
 #' TODO
 #'
-#' @param TODO
-#' @param TODO
+#' @param x catchment.
 #' @param ... Additional arguments.
 #'
 #' @return TODO
@@ -13,7 +12,7 @@
 #' sum(1:10)
 #' }
 
-indices <- function(Date, P, Q, A, ...) {
+indices <- function(x, Date, P, Q, A, ...) {
   ## %iMHEA Hydrological indices for rainfall-runoff monitoring.
   ## % [Indices] = iMHEA_Indices(Date,P,Q,A,flag) calculates iMHEA hydrological
   ## % indices using rainfall and runoff data.
@@ -76,8 +75,8 @@ indices <- function(Date, P, Q, A, ...) {
   ## % CumQ = Cumulative Discharge [mm].
   ## % DP   = Daily Precipitation [mm].
   ## % DQ   = Daily Discharge and baseflow separation [l/s/km2].
-  indices_p <- process_p(Date, P)
-  indices_q <- process_q(Date, Q, A)
+  indices_p <- process_p(x)
+  indices_q <- process_q(x)
 
   ## Runoff coefficient
   QYEAR = indices_q[[8]] * 365 / 1000000 * 86400
@@ -744,14 +743,7 @@ n_zero_p <- function(P, ...) {
   DayP0
 }
 
-process_p <- function(Date, P, ...) {
-  ## iMHEA Hydrological index calculation for Precipitation.
-  ##
-  ## Input:
-  ## Date = dd/mm/yyyy hh:mm:ss [date format].
-  ## P    = Precipitation [mm].
-  ##
-  ## Output:
+process_p <- function(x, ...) {
   ## IndicesP = Vector with iMHEA's Hydrological Indices for Precipitation.
   ##            PYear = Annual precipitation [mm].
   ##            DayP0 = Number of days with zero precipitation per year [day].
@@ -764,54 +756,32 @@ process_p <- function(Date, P, ...) {
   ## IDC  = Maximum Intensity - Duration Curve [mm/h v time].
   ## CumP = Cumulative Precipitation [date v mm].
   ## DP   = Daily precipitation only when data exist [date v mm].
-
-  voids = identify_voids(tibble(Date = Date, Event = P))
-  x <- tibble(Date = Date, P = P) %>%
-    mutate(Date = ceiling_date(Date, unit = "1 day")) %>%
-    group_by(Date) %>%
-    summarize(P = sum(P, na.rm = TRUE)) %>%
-    mutate(CumP = cumsum(P))
-  for (i in 1:nrow(voids)) {
-    idx <- x$Date > voids[i,1] & x$Date < voids[i,2]
-    x[idx,] = NA
-  }
-  x <- x %>% na.omit()
-
-  ## ## Agregate data at daily basis.
-  ## x <- aggregation(Date, P, set_units(1440, "min"))
-  ## x <- x %>% na.omit()
-
+  x_daily <- aggregate_daily(x)
+  x_monthly <- aggregate_monthly(x)
   ## Number of days with zero precipitation
-  DayP0 <- n_zero_p(x$P)
+  DayP0 <- n_zero_p(x_daily$Event)
   PP0 <- DayP0 / 365
-  PM <- x %>%
-    mutate(Date = floor_date(Date, unit = "1 month")) %>%
-    group_by(Date) %>%
-    summarize(P = sum(P)) %>%
+  PM <- x_monthly %>%
+    as_tibble() %>%
     mutate(Month = month(Date)) %>%
     group_by(Month) %>%
-    summarize(P = mean(P))
-
-  PMDry <- PM$P %>% min()
-  PYear <- sum(PM$P)
-  if (is.na(PYear))
-    PYear <- 365 * mean(x$P)
+    summarize(Event = mean(Event), n = n())
+  annual_summary <- PM %>%
+    summarize(
+      PMWet = max(Event),
+      PMDry = min(Event),
+      PYear = sum(Event)
+    )
+  PMDry <- annual_summary$PMDry
+  PYear <- annual_summary$PYear
+  ## if (is.na(PYear))
+  ##   PYear <- 365 * mean(x$P)
   SI <- (1 / PYear) * (sum(abs(PM - PYear / 12))) * 6 / 11
 
-  ## Precipitation in the driest month
-  PMDry = min(PM)
-  ## Annual precipitation
-  PYear = sum(PM)
-  if (is.na(PYear)) { # Why would it be NA?
-    PYear = 365 * mean(NewP)
-  }
-  SI = (1 / PYear) * (sum(abs(PM - PYear / 12))) * 6 / 11
-
   ## Maximum intensity duration curve
-  idc = idc_fun(Date, P) # TODO
-  iM15m = idc[idc$D == 15, 2] %>% as.numeric()
-  iM1hr = idc[idc$D == 60, 2] %>% as.numeric()
-
+  idc = idc_fun(x) # TODO
+  iM15m = idc[idc$D == set_units(15, minute), 2, drop = TRUE]
+  iM1hr = idc[idc$D == set_units(60, minute), 2, drop = TRUE]
   indicesP = list(PYear = PYear,
                   DayP0 = DayP0,
                   PP0 = PP0,
@@ -822,7 +792,7 @@ process_p <- function(Date, P, ...) {
   indicesP
 }
 
-idc_fun <- function(Date, P, ...) {
+idc_fun <- function(x, ...) {
   ## function [IDC,iM15m,iM1hr] = iMHEA_IDC(Date,P,varargin)
   ## iMHEA Calculation of Maximum Intensity-Duration Curve.
   ##
@@ -835,38 +805,30 @@ idc_fun <- function(Date, P, ...) {
   ## IDC   = Maximum Intensity - Duration Curve [mm/h v time].
   ## iM15m = Maximum precipitation intensity (15 min scale) [mm/h].
   ## iM1hr = Maximum precipitation intensity (1 hour scale) [mm/h].
+  Date <- x$Date
+  P <- x$Event %>% as.numeric()
   scale <- median(diff(Date)) %>% as.numeric(units = "mins")
   ## TODO aggregate to 5 minute intervals if needed
   stopifnot(scale == 5) # FIXME
   P[is.na(P)] <- 0
   k1 <- length(P)
+  ## Durations: 5, 10, 15, 30, 60 min, 2, 4, 12, 24, 48 hours
   D <- c(1, 2, 3, 6, 12, 24, 48, 144, 288, 576)
   u <- rep(0, k1)
-  IDC <- tibble(D = D * 5, Intensity = 0)
-  ## Maximum intensities
+  IDC <- tibble(D = D * scale, Intensity = 0)
   for (i in 1:length(D)) {
-    u[1] <- sum(P[1:D[i]]) # Sum of first i elements
-    ## Sum i elements using a moving window
-    for (j in 2:(k1 - D[i] + 1)) {
-      u[j] = u[j-1] + P[j + D[i] - 1] - P[j-1]
-    }
-    IDC[i,2] = max(u, na.rm = TRUE) * 12 / D[i]
-    ## IDC[i,3] = mean(u[u>1e-12], na.rm = TRUE) * 12 / D[i]
-    ## IDC[i,4] = median(u[u>1e-12], na.rm = TRUE) * 12 / D[i]
+    u <- zoo::rollsum(P, D[i], align = "left", na.pad = FALSE)
+    IDC[i,2] <- max(u, na.rm = TRUE) / (D[i] * scale) * 60 #* 12 / D[i]
   }
+  IDC <- IDC %>%
+    mutate(
+      D = set_units(D, minute),
+      Intensity = set_units(Intensity, mm/h)
+    )
   IDC
-  ## %% PLOT RESULTS
-  ## if nargin >= 3
-  ##     figure
-  ##     semilogx(IDC(:,1),IDC(:,2))
-  ##     xlabel('Duration (min)')
-  ##     ylabel('Maximum precipitation intensity (mm/h)')
-  ##     title('Maximum Intensity-Duration Curve')
-  ##     hold on
-  ## end
 }
 
-process_q <- function(Date, Q, A = NA, normalize = FALSE, ...) {
+process_q <- function(x, normalize = FALSE, ...) {
   ## [Indices] = iMHEA_ProcessQ(Date,Q,A,flags) calculates streamflow indices.
   ##
   ## Input:
@@ -911,38 +873,29 @@ process_q <- function(Date, Q, A = NA, normalize = FALSE, ...) {
   ##        BQ: Baseflow [l/s].
   ##        SQ: Stormflow [l/s].
 
+  area <- attr(x, "area") %>% set_units(m2)
   stopifnot(normalize & is.na(A))
   if (normalize)
-    Q <- Q / A
+    x <- x %>% mutate(Q = Q / area)
 
-  ## Average data at daily basis.
-  voids = identify_voids(tibble(Date = Date, Event = Q))
-  x <- tibble(Date = Date, Q = Q) %>%
-    mutate(Date = ceiling_date(Date, unit = "1 day")) %>%
-    group_by(Date) %>%
-    summarize(Q = sum(Q, na.rm = TRUE)) %>%
-    mutate(CumQ = cumsum(Q))
-  for (i in 1:nrow(voids)) {
-    idx <- which(x$Date > voids[i,1] & x$Date < voids[i,2])
-    x[idx,] = NA
-  }
-  x <- x %>% na.omit()
+  ## TODO enforce minimum data availability
+  x_daily <- aggregate_daily(x)
+  x_monthly <- aggregate_monthly(x)
+  x_annual <- aggregate_annual(x)
 
-  ZeroQ <- x$Q[x$Q == 0]
-  DayQ0 <- floor(365 * length(ZeroQ) / nrow(x))
+  Q <- x$Q %>% as.numeric() %>% na.omit()
+  ZeroQ <- sum(Q == 0, na.rm = TRUE)
+  DayQ0 <- floor(365 * ZeroQ / length(Q))
   PQ0 <- DayQ0 / 365
-  QM <- x %>%
-    mutate(Date = floor_date(Date, unit = "1 month")) %>%
-    group_by(Date) %>%
-    summarize(Q = mean(Q)) %>%
+  QM <- x_monthly %>%
+    na.omit() %>%
+    as_tibble() %>%
     mutate(Month = month(Date)) %>%
     group_by(Month) %>%
-    summarize(Q = mean(Q))
-  QDMY <- x %>%
-    mutate(Year = year(Date)) %>%
-    group_by(Year) %>%
     summarize(Q = mean(Q), n = n())
-  QDMY <- mean(QDMY$Q)
+  QM <- tibble(Month = 1:12) %>% left_join(QM, by = "Month")
+
+  QDMY <- mean(x_annual$Q)
   QMDry <- min(QM$Q)
   DRYQMEAN = QMDry / mean(QM$Q)
   DRYQWET = QMDry / max(QM$Q)
@@ -962,8 +915,8 @@ process_q <- function(Date, Q, A = NA, normalize = FALSE, ...) {
   R2FDC <- (log10(Q66) - log10(Q33)) / (0.66 - 0.33)
 
   ## Hydrological regulation index
-  auxFDC <- Q
-  auxFDC[pct < 50] = q50
+  auxFDC <- fdc$Q
+  auxFDC[fdc$Exceedance_Pct < 50] = Q50
   IRH <- sum(auxFDC) / sum(Q)
 
   ## % Baseflow index at daily scale.
@@ -974,6 +927,13 @@ process_q <- function(Date, Q, A = NA, normalize = FALSE, ...) {
   ##     [~,BQ1,SQ1,BFI1,k1] = iMHEA_BaseFlowUK(Date,Q,1); % Gustard et al., 1992
   ##     [~,~,BFI2,k2] = iMHEA_BaseFlow(NewDate,NewQ); % Chapman, 1999
   ## end
+  bf <- baseflow_uk() # TODO also return SQ
+  k <- baseflow_RecessionConstant(bf)
+  ## Vb = nansum(BQ(DDate>=nDate(1) & DDate<=nDate(end)));
+  ## Va = nansum(DQ1(DDate>=nDate(1) & DDate<=nDate(end)));
+  ## BFI = Vb/Va;
+  bfi <- sum(bq) / sum(x_daily$Q)
+
   BQ1 <- NA
   SQ1 <- NA
   BFI1 <- NA

@@ -531,7 +531,7 @@ aggregate_daily.catchment <- function(x, ...) {
     group_by_key() %>%
     index_by(NewDate = ~ as_date(.)) %>%
     summarize(
-      n = sum(is.na(Q)),
+      ## n = sum(is.na(Q)),
       Q = mean(Q),
       H = mean(H),
       Event = sum(Event, na.rm = TRUE)
@@ -563,7 +563,7 @@ aggregate_hourly.catchment <- function(x, ...) {
     group_by_key() %>%
     index_by(NewDate = ~ ceiling_date(., unit = "1 hour")) %>%
     summarize(
-      n = sum(is.na(Q)),
+      ## n = sum(is.na(Q)),
       Q = mean(Q),
       H = mean(H),
       Event = sum(Event, na.rm = TRUE)
@@ -573,6 +573,67 @@ aggregate_hourly.catchment <- function(x, ...) {
   x_hourly
 }
 
+#' Monthly aggregation
+#'
+#' Convenience functions
+#'
+#' @param x catchment
+#' @param ... Additional arguments.
+#'
+#' @return tsibble
+#'
+aggregate_monthly <- function(x, ...) {
+  UseMethod("aggregate_monthly")
+}
+
+#' @export
+aggregate_monthly.catchment <- function(x, ...) {
+  x_monthly <-
+    x %>%
+    mutate(across(any_of(c("Q", "H", "Event")), as.numeric)) %>%
+    group_by_key() %>%
+    index_by(NewDate = ~ yearmonth(.)) %>%
+    summarize(
+      ## n = sum(is.na(Q)),
+      Q = mean(Q),
+      H = mean(H),
+      Event = sum(Event, na.rm = TRUE)
+    ) %>%
+    rename(Date = NewDate)
+  class(x_monthly) <- c("catchment", class(x))
+  x_monthly
+}
+
+#' Annual aggregation
+#'
+#' Convenience functions
+#'
+#' @param x catchment
+#' @param ... Additional arguments.
+#'
+#' @return tsibble
+#'
+aggregate_annual <- function(x, ...) {
+  UseMethod("aggregate_annual")
+}
+
+#' @export
+aggregate_annual.catchment <- function(x, ...) {
+  x_annual <-
+    x %>%
+    mutate(across(any_of(c("Q", "H", "Event")), as.numeric)) %>%
+    group_by_key() %>%
+    index_by(NewDate = ~ year(.)) %>%
+    summarize(
+      ## n = sum(is.na(Q)),
+      Q = mean(Q, na.rm = TRUE),
+      H = mean(H, na.rm = TRUE),
+      Event = sum(Event, na.rm = TRUE)
+    ) %>%
+    rename(Date = NewDate)
+  class(x_annual) <- c("catchment", class(x))
+  x_annual
+}
 ## ## #' export
 ## ## aggregate.rain_gauge <- function(x, timescale, ...)
 ## aggregation <- function(Date, P, timescale, ...) {

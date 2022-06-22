@@ -4,9 +4,11 @@
 \alias{indices}
 \title{Compute indices}
 \usage{
-indices(Date, P, Q, A, ...)
+indices(x, Date, P, Q, A, ...)
 }
 \arguments{
+\item{x}{catchment.}
+
 \item{...}{Additional arguments.}
 }
 \value{

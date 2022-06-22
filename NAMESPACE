@@ -2,7 +2,9 @@
 
 S3method(aggregate,rain_gauge)
 S3method(aggregate,stream_gauge)
+S3method(aggregate_annual,catchment)
 S3method(aggregate_daily,catchment)
 S3method(aggregate_hourly,catchment)
+S3method(aggregate_monthly,catchment)
 S3method(depure,tbl_ts)
 export(infill_precip)

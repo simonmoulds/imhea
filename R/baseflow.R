@@ -57,7 +57,7 @@ baseflow_uk <- function(Date, Q, ...) {
   ## determine turning points, defined as:
   #    0.9*Qt < min(Qt-1, Qt+1)
   # do this using a weighted rolling min function
-  df_mins$iQmin <- rollapply(
+  df_mins$iQmin <- zoo::rollapply(
     df_mins$Qmin,
     width=3,
     align="center",
@@ -68,6 +68,7 @@ baseflow_uk <- function(Date, Q, ...) {
   TP_day <- df_mins$day[df_mins$iQmin==2]
   TP_Qmin <- df_mins$Qmin[df_mins$iQmin==2]
 
+  endrule = "B"
   if (length(TP_day>1)){
 
     # linearly interpolate to length Q
@@ -94,6 +95,115 @@ baseflow_uk <- function(Date, Q, ...) {
   i_tooHigh <- which(bf>Q)
   bf[i_tooHigh] <- Q[i_tooHigh]
   return(bf)
+  ## %% CALCULATE THE RECESSION CONSTANT
+  ## if nargin>=3
+  ##     % Initialise variables
+  ##     lim = 0.8; % Minimum R2 for linear fit.
+  ##     n = length(DDate);
+  ##     R = zeros(n,1);
+  ##     M = zeros(n,1);
+  ##     LogBQ = log(BQ);
+
+  ##     h = waitbar(0,'Calculating recession constant...');
+  ##     % Identifying residence time and k.
+  ##     for i = 1:n
+  ##         Today = DDate(i);
+  ##         X = datenum(DDate(and(DDate>=Today,DDate<Today+Daycheck)));
+  ##         Y = LogBQ(and(DDate>=Today,DDate<Today+Daycheck));
+  ##         [R(i),M(i)] = regression(X',Y');
+  ##         waitbar(i/n)
+  ##     end
+  ##     close(h);
+  ##     R = R.^2;
+  ##     M = datenum(DDate(2)-DDate(1))*M;
+
+  ##     DateTau = DDate(and(R>=lim,M<0));
+  ##     RTau = R(and(R>=lim,M<0));
+  ##     MTau = M(and(R>=lim,M<0));
+  ##     K = exp(MTau);
+  ##     k = max(K);
+  ## end
+}
+
+baseflow_RecessionConstant <- function(Q,
+                                       UB_prc = 0.95,
+                                       method = "Brutsaert",
+                                       min_pairs = 50) {
+
+  # Script to estimate baseflow recession constant.
+  #
+  # Inputs:
+  #   Q = discharge timeseries (no missing data) (any units are OK)
+  #   UB_prc = percentile to use for upper bound of regression
+  #   method = method to use to calculate recession coefficient
+  #     "Langbein" = Langbein (1938) as described in Eckhardt (2008)
+  #     "Brutsaert" = Brutsaert (2008) WRR
+  #   min_pairs = minimum number of date pairs retained after filtering out
+  #     quickflow events; 50 is from van Dijk (2010) HESS
+  #
+  # Output:
+  #   k = recession constant
+
+  ## package dependencies
+  require(quantreg)  # used for quantile regression
+
+  if (method=="Langbein"){
+    # calculate difference
+    dQ_dt = c(NaN, diff(Q))
+
+    # find days of five consecutive negative values
+    which_negative <- which(dQ_dt < 0 & Q > 0)
+    which_positive <- which(dQ_dt >= 0)
+    which_positive_with_buffer <- unique(c(which_positive-2, which_positive-1,
+                                           which_positive,
+                                           which_positive+1, which_positive+2))  # 2 days before and 2 days after a positive or 0 value
+    which_positive_with_buffer <- which_positive_with_buffer[which_positive_with_buffer > 0]  # get rid of negative indices
+    which_keep <- which_negative[!(which_negative %in% which_positive_with_buffer)]  # get rid of points within buffer around flow increases
+    which_keep <- which_keep[(which_keep-1) %in% which_keep]  # trim to dates with both the current and previous day retained
+
+    # any data exist to fit?
+    if (length(which_keep) >= min_pairs){
+
+      # fit regression
+      fit.qr <- rq(Q[which_keep] ~ 0+Q[which_keep-1], tau=UB_prc)  # force intercept to go through origin
+
+      # extract constant
+      k <- as.numeric(coef(fit.qr)[1])
+
+    } else {
+      k <- NaN
+    }
+    return(k)
+  }
+
+  if (method=="Brutsaert"){
+    # calculate lagged difference (dQ/dt) based on before/after point
+    dQ_dt <- c(NaN, diff(Q, lag=2)/2, NaN)
+    dQ_dt_left <- c(NaN, diff(Q))
+
+    # screen data for which dQ_dt to calculate recession, based on rules in Brutsaert (2008) WRR Section 3.2
+    which_negative <- which(dQ_dt < 0 & dQ_dt_left < 0 & Q > 0)
+    which_positive <- which(dQ_dt >= 0)
+    which_positive_with_buffer <- unique(c(which_positive-2, which_positive-1, which_positive,
+                                           which_positive+1, which_positive+2, which_positive+3))  # 2 days before and 3 days after a positive or 0 value
+    which_positive_with_buffer <- which_positive_with_buffer[which_positive_with_buffer > 0]  # get rid of negative indices; possible because of 2 days before
+    which_keep <- which_negative[!(which_negative %in% which_positive_with_buffer)]  # get rid of points within buffer around flow increases
+    which_keep <- which_keep[(which_keep-1) %in% which_keep]  # trim to dates with both the current and previous day retained
+
+    # any data exist to fit?
+    if (length(which_keep) >= min_pairs){
+
+      # fit regression
+      fit.qr <- rq(Q[which_keep] ~ 0+Q[which_keep-1], tau=UB_prc)  # force intercept to go through origin
+
+      # extract constant
+      k <- as.numeric(coef(fit.qr)[1])
+
+    } else {
+      k <- NaN
+    }
+    return(k)
+  }
 }
 
 ## ## function [BQ,SQ] = par3(Q,k,C,alpha)
