@@ -903,7 +903,7 @@ process_q <- function(x, normalize = FALSE, ...) {
   ## Seasonality index
   SI <- (1 / (12 * QDMY)) * (sum(abs(QM$Q - QDMY))) * 6 / 11
 
-  ## % Flow Duration Curve, FDC Slope, and IRH.
+  ## Flow Duration Curve, FDC Slope, and IRH.
   fdc <- flow_duration_curve(Q)
   Q95 <- fdc_percentile(fdc, 95)
   Q75 <- fdc_percentile(fdc, 75)
@@ -927,12 +927,14 @@ process_q <- function(x, normalize = FALSE, ...) {
   ##     [~,BQ1,SQ1,BFI1,k1] = iMHEA_BaseFlowUK(Date,Q,1); % Gustard et al., 1992
   ##     [~,~,BFI2,k2] = iMHEA_BaseFlow(NewDate,NewQ); % Chapman, 1999
   ## end
-  bf <- baseflow_uk() # TODO also return SQ
-  k <- baseflow_RecessionConstant(bf)
+  bf <- baseflow_uk(x) # TODO also return SQ
+  k <- baseflow_recession_constant(x_daily$Date, bf)
+  bfi <- mean(bf[!is.na(bf)], na.rm = TRUE) / mean(x_daily$Q[!is.na(bf)], na.rm = TRUE)
+
   ## Vb = nansum(BQ(DDate>=nDate(1) & DDate<=nDate(end)));
   ## Va = nansum(DQ1(DDate>=nDate(1) & DDate<=nDate(end)));
   ## BFI = Vb/Va;
-  bfi <- sum(bq) / sum(x_daily$Q)
+  ## bfi <- sum(bf) / sum(x_daily$Q, na.rm = TRUE)
 
   BQ1 <- NA
   SQ1 <- NA
@@ -974,6 +976,7 @@ process_q <- function(x, normalize = FALSE, ...) {
                    DRYQWET = DRYQWET,
                    SINDQ = SINDQ)
 }
+
 
 fdc_percentile <- function(fdc, percentile, ...) {
   spline(x = fdc$Exceedance_Pct, y = fdc$Q, xout = percentile)$y

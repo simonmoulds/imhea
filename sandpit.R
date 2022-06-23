@@ -216,12 +216,41 @@ x <- catchment(
 x_daily <- x %>% aggregate_daily()
 x_hourly <- x %>% aggregate_hourly()
 
+## ## Check daily aggregation
+## x_matlab_daily_streamflow <-
+##   read_csv("inst/testdata/matlab_daily_streamflow.csv") %>%
+##   setNames(c("Date", "Pm", "Qm", "Qbm")) %>%
+##   mutate(Date = (Date - 719529) * 86400) %>%
+##   mutate(Date = as.POSIXct(Date, tz = "UTC", origin = "1970-01-01")) %>%
+##   mutate(Date = round_date(Date, unit = "0.25 seconds")) %>%
+##   mutate(Date = force_tz(Date, "Etc/GMT-5")) %>%
+##   mutate(Date = as.Date(Date))
 
+## x_matlab_5m_streamflow <-
+##   read_csv("inst/testdata/matlab_5m_streamflow.csv") %>%
+##   setNames(c("Date", "Qm", "Pm")) %>%
+##   mutate(Date = (Date - 719529) * 86400) %>%
+##   mutate(Date = as.POSIXct(Date, tz = "UTC", origin = "1970-01-01")) %>%
+##   mutate(Date = round_date(Date, unit = "0.25 seconds")) %>%
+##   mutate(Date = force_tz(Date, "Etc/GMT-5"))
 
-## TODO Baseflow
-## [see how this fits into the overall computation of indices]
+## ## These match exactly
+## y <- x_daily %>% left_join(x_matlab_daily_streamflow)
+## y <- y %>% mutate(Qb = baseflow_uk(Date, Q))
 
+## plot(y$Date, y$Q)
+## ## lines(y$Date, y$Qm, col="magenta")
+## lines(y$Date, y$Qb, col="blue")
+## plot(y$Date, y$Qb)
+## lines(y$Date, y$Qbm, col="magenta")
 
+## a <- x_matlab_daily_streamflow %>% na.omit()
+## k <- baseflow_recession_constant(a$Date, a$Qbm) # This seems to work
+x_matlab_baseflow_input <-
+  read_csv("inst/testdata/matlab_baseflow_input.csv") %>%
+  mutate(Date = as.Date(Date, format = "%d-%b-%Y"))
+
+## TODO see why the above does not correspond with our Q/Date inputs
 
 stop()
 
