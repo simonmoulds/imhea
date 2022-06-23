@@ -111,8 +111,8 @@ baseflow <- function(Date, Q, ...) {
   k <- baseflow_recession_constant(Date, Q, n_day = 7)
   C <- 0.085
   alpha <- -0.1
-  BQ1 <- par3(Q, k, 1-k, alpha)
-  BQ2 <- par3(Q, k, C, alpha)
+  BQ1 <- par3(Q, k, 1-k, 0)
+  BQ2 <- par3(Q, k, C, 0)
   SQ2 <- Q - BQ2
   BFI2 <- mean(BQ2) / mean(Q)
   BFI2

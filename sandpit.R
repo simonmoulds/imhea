@@ -250,7 +250,7 @@ x_matlab_baseflow_input <-
   read_csv("inst/testdata/matlab_baseflow_input.csv") %>%
   mutate(Date = as.Date(Date, format = "%d-%b-%Y"))
 
-## TODO see why the above does not correspond with our Q/Date inputs
+## TODO add tidy up baseflow methods
 
 stop()
 
