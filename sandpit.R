@@ -162,6 +162,7 @@ timescale <- set_units(int_HRes, "s")
 p1 <- aggregation_cs(p1, timescale = timescale)
 p2 <- aggregation_cs(p2, timescale = timescale)
 p_merged <- infill_precip(p1, p2, new_id = "LLO_01_P0_merged")
+## FIXME - this doesn't work on first run throught
 q1 <- aggregate(q1, timescale = timescale)
 
 ## ## Matlab iMHEA_AggregationCS(...) output
@@ -209,12 +210,18 @@ catchment_area <-
   iMHEA_Catchment_AREA %>%
   filter(Catchment %in% catchment_id) %>%
   `[`(, 2, drop=T)
+
 x <- catchment(
   q1, p1, p2, id = catchment_id,
   area = set_units(catchment_area, km^2)
 )
 x_daily <- x %>% aggregate_daily()
 x_hourly <- x %>% aggregate_hourly()
+
+tsibble::interval(x)
+tsibble::interval(x_daily)
+tsibble::interval(x_hourly)
+tsibble::is_regular(x)
 
 ## ## Check daily aggregation
 ## x_matlab_daily_streamflow <-
