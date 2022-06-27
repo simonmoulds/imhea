@@ -107,7 +107,7 @@ process_p <- function(x, ...) {
 
   ## Number of days with zero precipitation
   x_daily <- aggregate_daily(x)
-  DayP <- x_daily$Event %>% na.omit()
+  DayP <- x_daily$Event %>% as.numeric() %>% na.omit()
   k <- length(P)
   ZeroP <- P[P == 0]
   DayP0 <- floor(365 * length(ZeroP) / k)
@@ -221,7 +221,6 @@ process_q <- function(x, normalize = FALSE, ...) {
   ##        SQ: Stormflow [l/s].
 
   area <- attr(x, "area") %>% set_units(m2)
-  stopifnot(normalize & is.na(A))
   if (normalize)
     x <- x %>% mutate(Q = Q / area)
 
@@ -251,20 +250,20 @@ process_q <- function(x, normalize = FALSE, ...) {
   SI <- (1 / (12 * QDMY)) * (sum(abs(QM$Q - QDMY))) * 6 / 11
 
   ## Flow Duration Curve, FDC Slope, and IRH.
-  fdc <- flow_duration_curve(Q)
-  Q95 <- fdc_percentile(fdc, 95)
-  Q75 <- fdc_percentile(fdc, 75)
-  Q66 <- fdc_percentile(fdc, 66)
-  Q50 <- fdc_percentile(fdc, 50)
-  Q33 <- fdc_percentile(fdc, 33)
-  Q25 <- fdc_percentile(fdc, 25)
-  Q10 <- fdc_percentile(fdc, 10)
+  fdc <- compute_fdc(x)
+  Q95 <- fdc$Q[fdc$Exceedance_Pct %in% 95]
+  Q75 <- fdc$Q[fdc$Exceedance_Pct %in% 75]
+  Q66 <- fdc$Q[fdc$Exceedance_Pct %in% 66]
+  Q50 <- fdc$Q[fdc$Exceedance_Pct %in% 50]
+  Q33 <- fdc$Q[fdc$Exceedance_Pct %in% 33]
+  Q25 <- fdc$Q[fdc$Exceedance_Pct %in% 25]
+  Q10 <- fdc$Q[fdc$Exceedance_Pct %in% 10]
   R2FDC <- (log10(Q66) - log10(Q33)) / (0.66 - 0.33)
 
   ## Hydrological regulation index
   auxFDC <- fdc$Q
   auxFDC[fdc$Exceedance_Pct < 50] = Q50
-  IRH <- sum(auxFDC) / sum(Q)
+  IRH <- sum(auxFDC) / sum(fdc$Q)
 
   ## % Baseflow index at daily scale.
   ## if nargin >= 5
@@ -274,10 +273,19 @@ process_q <- function(x, normalize = FALSE, ...) {
   ##     [~,BQ1,SQ1,BFI1,k1] = iMHEA_BaseFlowUK(Date,Q,1); % Gustard et al., 1992
   ##     [~,~,BFI2,k2] = iMHEA_BaseFlow(NewDate,NewQ); % Chapman, 1999
   ## end
-  bf <- baseflow_uk(x) # TODO also return SQ
-  k <- baseflow_recession_constant(x_daily$Date, bf)
-  bfi <- mean(bf[!is.na(bf)], na.rm = TRUE) / mean(x_daily$Q[!is.na(bf)], na.rm = TRUE)
 
+  ## Need to return:
+  ## * Baseflow
+  ## * Stormflow
+  ## * Baseflow index
+  ## * Recession constant (k)
+
+  ## FIXME add k, BFI to metadata
+  x_daily <- baseflow_ukih(x_daily) # TODO also return SQ
+  k_ukih <- compute_recession_constant(x_daily$Date, x_daily$Qb_UKIH)
+  bfi_ukih <- compute_baseflow_index(x_daily$Date, x_daily$Q, x_daily$Qb_UKIH)
+  ## FIXME baseflow_ukih not returning catchment object
+  x_daily <- baseflow_chapman(x_daily)
   ## Vb = nansum(BQ(DDate>=nDate(1) & DDate<=nDate(end)));
   ## Va = nansum(DQ1(DDate>=nDate(1) & DDate<=nDate(end)));
   ## BFI = Vb/Va;
@@ -290,16 +298,14 @@ process_q <- function(x, normalize = FALSE, ...) {
   BFI2 <- NA
   k2 <- NA
 
-  ## % Compile daily flows.
-  ## DQ = [datenum(DDate),DQ,BQ1,SQ1];
-
-  ## % Richards-Baker flashiness index (RBI).
-  ## Qi_1 = abs(diff(NewQ));
-  ## RBI1 = sum(Qi_1)/sum(NewQ(2:end));
-  ## Qi_2 = 0.5*(Qi_1(1:end-1)+Qi_1(2:end));
-  ## RBI2 = sum(Qi_2)/sum(NewQ(2:end-1));
-  RBI1 <- NA
-  RBI2 <- NA
+  ## Richards-Baker flashiness index (RBI).
+  ## FIXME - minimum data availability?
+  DQ <- x_daily$Q %>% na.omit()
+  n_day <- length(DQ)
+  Qi_1 = abs(diff(DQ))
+  RBI1 = sum(Qi_1, na.rm = TRUE) / sum(DQ[2:n_day], na.rm = TRUE)
+  Qi_2 = 0.5 * (Qi_1[1:(n_day - 1)] + Qi_1[2:n_day])
+  RBI2 = sum(Qi_2, na.rm = TRUE) / sum(DQ[2:(n_day - 1)], na.rm = TRUE)
 
   IndicesQ <- list(QDMin = QDMin,
                    Q95 = Q95,
@@ -322,47 +328,22 @@ process_q <- function(x, normalize = FALSE, ...) {
                    DRYQMEAN = DRYQMEAN,
                    DRYQWET = DRYQWET,
                    SINDQ = SINDQ)
+  IndicesQ
 }
 
-
-fdc_percentile <- function(fdc, percentile, ...) {
-  spline(x = fdc$Exceedance_Pct, y = fdc$Q, xout = percentile)$y
-}
-
-flow_duration_curve <- function(Q, ...) {
-  ## Input:
-  ## Q = Discharge [l/s, l/s/km2, m3/s, mm, etc.].
-  ##
-  ## Output:
-  ## FDC   = Flow duration curve information [Q vs %].
-  ## R2FDC = Slope of the FDC between 33%-66% / Mean flow [-].
-  ## IRH   = Hydrological Regulation Index [-].
-  ## Ptile = Percentiles from the FDC, including:
-  ##         Q95   = 05th Percentile [l/s].
-  ##         Q75   = 25th Percentile [l/s].
-  ##         Q66   = 33rd Percentile [l/s].
-  ##         Q50   = 50th percentile [l/s].
-  ##         Q33   = 66th Percentile [l/s].
-  ##         Q25   = 75th Percentile [l/s].
-  ##         Q10   = 90th Percentile [l/s].
-  Q <- Q %>% na.omit()
+compute_fdc <- function(x, ...) {
+  ## FIXME minimum time interval?
+  Q <- x$Q %>% as.numeric() %>% na.omit()
   k <- length(Q)
   pct <- 100 * (1 - ((1:k) - .44) / (k + .12))
   Q <- sort(Q)
-  tibble(Q = Q, Exceedance_Pct = pct)
-  ## ## plot(pct, Q)
-  ## ## q95 <- spline(x = pct, y = Q, xout = 95)$y
-  ## ## q75 <- spline(x = pct, y = Q, xout = 75)$y
-  ## q66 <- spline(x = pct, y = Q, xout = 66)$y
-  ## q50 <- spline(x = pct, y = Q, xout = 50)$y
-  ## q33 <- spline(x = pct, y = Q, xout = 33)$y
-  ## ## q25 <- spline(x = pct, y = Q, xout = 25)$y
-  ## ## q10 <- spline(x = pct, y = Q, xout = 10)$y
-  ## R2FDC <- (log10(q66) - log10(q33)) / (0.66 - 0.33)
-  ## ## Hydrological regulation index
-  ## auxFDC <- Q
-  ## auxFDC[pct < 50] = q50
-  ## IRH <- sum(auxFDC) / sum(Q)
+  pct_out <- 0:100
+  Q_out <- sapply(
+    pct_out,
+    FUN=function(xout)
+      spline(x = pct, y = Q, xout = xout)$y
+  )
+  tibble(Exceedance_Pct = pct_out, Q = Q_out)
 }
 
 monthly_flow <- function(Date, Q) {

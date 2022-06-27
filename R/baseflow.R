@@ -72,7 +72,8 @@ baseflow_ukih <- function(x, ...) {
   # Find any Qb>Q and set to Q
   i_tooHigh <- which(Qb>Q)
   Qb[i_tooHigh] <- Q[i_tooHigh]
-  x_daily <- x_daily %>% mutate(Qb = Qb)
+  Qs <- Q - Qb
+  x_daily <- x_daily %>% mutate(Qb_UKIH = Qb, Qs_UKIH = Qs)
   x_daily
 }
 
@@ -107,7 +108,7 @@ baseflow_chapman <- function(x, ...) {
   BFI2
 }
 
-baseflow_recession_constant <- function(Date, Q, n_day = 5, ...) {
+compute_recession_constant <- function(Date, Q, n_day = 5, ...) {
   lim <- 0.8 # Minimum R2 for linear fit
   n <- length(Date)
   R <- rep(0, n)
@@ -129,4 +130,11 @@ baseflow_recession_constant <- function(Date, Q, n_day = 5, ...) {
   K <- exp(MTau)
   k <- max(K, na.rm = TRUE)
   k
+}
+
+compute_baseflow_index <- function(Date, Q, Qb, ...) {
+  na_ix <- is.na(Qb) | is.na(Q)
+  Qb <- Qb[!na_ix]
+  Q <- Q[!na_ix]
+  mean(Qb) / mean(Q)
 }
