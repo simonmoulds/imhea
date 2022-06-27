@@ -32,6 +32,7 @@ catchment <- function(q, ..., id, area) {
   x <- q %>% full_join(p_merged, by = c("ID", "Date"))
   class(x) <- c("catchment", class(x))
   attr(x, "area") <- set_units(area, km^2)
+  x <- x %>% update_indices()
   x
 }
 

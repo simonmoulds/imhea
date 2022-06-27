@@ -466,12 +466,11 @@ aggregate <- function(x, timescale, ...) {
 
 #' @export
 aggregate.stream_gauge <- function(x, timescale, ...) {
-  timescale_str <- paste0(as.numeric(set_units(timescale, "min")), " min")
   x <-
     x %>%
     mutate(across(any_of(c("Q", "H")), as.numeric)) %>%
     group_by_key() %>%
-    index_by(NewDate = ~ ceiling_date(., unit = timescale_str)) %>%
+    index_by(NewDate = ~ ceiling_date(., unit = paste0(as.numeric(set_units(timescale, "min")), " min"))) %>%
     summarize(across(any_of(c("Q", "H")), mean)) %>%
     rename(Date = NewDate)
   x <- x %>% tsibble::fill_gaps(.full = TRUE)

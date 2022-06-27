@@ -22,10 +22,19 @@
 #' \dontrun{
 #' sum(1:10)
 #' }
-baseflow_ukih <- function(x, ...) {
-  x_daily <- aggregate_daily(x)
-  Date <- x_daily$Date
-  Q <- x_daily$Q
+baseflow <- function(Date, Q, method = "UKIH", ...) {
+  stopifnot(method %in% c("UKIH", "Chapman1999"))
+  if (method == "UKIH") {
+    return(baseflow_ukih(Date, Q, ...))
+  } else if (method == "Chapman1999") {
+    return(baseflow_chapman(Date, Q, ...))
+  }
+}
+
+baseflow_ukih <- function(Date, Q, ...) {
+  ## x_daily <- aggregate_daily(x)
+  ## Date <- x_daily$Date
+  ## Q <- x_daily$Q
   Q[is.na(Q)] <- Inf
 
   ## Fixed interval of width 5
@@ -72,20 +81,24 @@ baseflow_ukih <- function(x, ...) {
   # Find any Qb>Q and set to Q
   i_tooHigh <- which(Qb>Q)
   Qb[i_tooHigh] <- Q[i_tooHigh]
-  Qs <- Q - Qb
-  x_daily <- x_daily %>% mutate(Qb_UKIH = Qb, Qs_UKIH = Qs)
-  x_daily
+  ## Qs <- Q - Qb
+  ## x_daily <- x_daily %>% mutate(Qb_UKIH = Qb)
+  ## x_daily
+  Qb
 }
 
-baseflow_chapman <- function(x, ...) {
+baseflow_chapman <- function(Date, Q, ...) {
   ## FIXME - the algorithm currently does not cope with NA
-  x_daily <- aggregate_daily(x)
-  Date <- x_daily$Date
-  Q <- x_daily$Q
-  Q[is.na(Q)] <- Inf
+  ## x_daily <- aggregate_daily(x)
+  ## Date <- x_daily$Date
+  ## Q <- x_daily$Q
+  ## Q[is.na(Q)] <- Inf
+  na_ix <- !is.na(Q)
+  n <- length(Q)
+
   Date <- Date[!is.na(Q)]
   Q <- Q[!is.na(Q)]
-  k <- baseflow_recession_constant(Date, Q, n_day = 7)
+  k <- compute_recession_constant(Date, Q, n_day = 7)
   C <- 0.085
   alpha <- -0.1
 
@@ -101,11 +114,13 @@ baseflow_chapman <- function(x, ...) {
     }
     BQ
   }
-  BQ1 <- myfun(Q, k, 1-k, 0)
+  ## BQ1 <- myfun(Q, k, 1-k, 0)
   BQ2 <- myfun(Q, k, C, 0)
-  SQ2 <- Q - BQ2
-  BFI2 <- mean(BQ2) / mean(Q)
-  BFI2
+  ## SQ2 <- Q - BQ2
+  ## BFI2 <- mean(BQ2) / mean(Q)
+  BQ <- rep(NA, n)
+  BQ[na_ix] <- BQ2
+  BQ
 }
 
 compute_recession_constant <- function(Date, Q, n_day = 5, ...) {

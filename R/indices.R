@@ -11,84 +11,28 @@
 #' \dontrun{
 #' sum(1:10)
 #' }
-
-indices <- function(x, Date, P, Q, A, ...) {
-  ## %iMHEA Hydrological indices for rainfall-runoff monitoring.
-  ## % [Indices] = iMHEA_Indices(Date,P,Q,A,flag) calculates iMHEA hydrological
-  ## % indices using rainfall and runoff data.
-  ## %
-  ## % Input:
-  ## % Date = dd/mm/yyyy hh:mm:ss [date format].
-  ## % P = Precipitation [mm].
-  ## % Q = Discharge [l/s].
-  ## % A = Catchment area [km2].
-  ## % flag = leave empty NOT to graph plots.
-  ## %
-  ## % Output:
-  ## % IndicesP = Vector with iMHEA's Hydrological Indices for Precipitation.
-  ## %           PYear = Annual precipitation [mm].
-  ## %           DayP0 = Number of Days with zero precipitation per year [-].
-  ## %           PMDry = Precipitation of driest month [mm].
-  ## %           Sindx = Seasonality index [-].
-  ## %           iM15m = Maximum precipitation intensity (15 min scale) [mm/h].
-  ## %           iM1hr = Maximum precipitation intensity (1 hour scale) [mm/h].
-  ## % PM   = Monthly precipitation (mm) per month number [Jan=1, Dec=12].
-  ## % IDC  = Maximum Intensity - Duration Curve [mm/h v time].
-  ## %
-  ## % IndicesQ = Vector with iMHEA's Hydrological Indices for Discharge.
-  ## %           Low flows:
-  ## %               QDMin = Minimum daily flow [l/s/km2].
-  ## %               Q95   = 95 Percentile flow from IDC [l/s/km2].
-  ## %               DayQ0 = Days with zero flow per year [-].
-  ## %               PQ0   = Proportion of days with zero flow per year [-].
-  ## %               QMDry = Mean daily flow of driest month [l/s/km2].
-  ## %           High flows:
-  ## %               QDMax = Maximum Daily flow [l/s/km2].
-  ## %               Q10   = 10 Percentile flow from IDC [l/s/km2].
-  ## %           Mean flows:
-  ## %               QDMY  = Annual Mean Daily flow [l/s/km2].
-  ## %               QDML  = Long-term Mean Daily flow [l/s/km2].
-  ## %               Q50   = 50 percentile flow from IDC [l/s/km2].
-  ## %           Regulation:
-  ## %               BFI1   = Baseflow index from UK handbook [-].
-  ## %               k1     = Recession constant from UK handbook [-].
-  ## %               BFI2   = Baseflow index 2-parameter algorithm [-].
-  ## %               k2     = Recession constant 2-parameter algorithm [-].
-  ## %               Range  = Discharge range [-] Qmax/Qmin.
-  ## %               R2FDC  = Slope of the FDC between 33% and 66% / Mean flow.
-  ## %               IRH   = Hydrological Regulation Index [-].
-  ## %               RBI1  = Richards-Baker annual flashiness index [-].
-  ## %               RBI2  = Richards-Baker seasonal flashiness index [-].
-  ## %               DRYQMEAN = Min monthly flow / Mean monthly flow [-].
-  ## %               DRYQWET  = Min monthly flow / Max monthly flow [-].
-  ## %               SINDQ = Seasonality Index in flows [-].
-  ## % QM = Monthly Mean Daily flow (l/s) per month number [Jan=1, Dec=12].
-  ## % FDC  = Flow Duration Curve [l/s v %].
-  ## %
-  ## % RR   = Runoff Ratio [-) (Annual Discharge)/(Annual precipitation).
-  ## %        a: from interannual averages
-  ## %        m: from monthly averages
-  ## %        l: from long-term data averages
-  ## % QYEAR= Annual Discharge [mm].
-  ## % Diff = Annual Precipitation - Annual Discharge [mm].
-  ## % CumP = Cumulative Rainfall [mm].
-  ## % CumQ = Cumulative Discharge [mm].
-  ## % DP   = Daily Precipitation [mm].
-  ## % DQ   = Daily Discharge and baseflow separation [l/s/km2].
+update_indices <- function(x, ...) {
   indices_p <- process_p(x)
   indices_q <- process_q(x)
-  ## Runoff coefficient
-  QYEAR = indices_q[[8]] * 365 / 1000000 * 86400
-  RRa = QYEAR / indices_p[[1]]
-  CumQ[,2] = CumQ[,2] / 1000000 * 86400
-  if (is.na(QYEAR)) {
-    QYEAR = mean(DQ[,2]) / 1000000 * 86400
-  }
-  RRl = mean(DQ[,2]) / 1000000 * 86400 / (mean(DP[,2]))
-  ## Monthly discharge in mm
-  MDays = c(31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31)
-  QM = QM * MDays / 1000000 * 86400
-  RRm = sum(QM) / sum(PM)
+  ## indices_climate
+  ## indices_plus
+  ## TODO - add indices to object
+  ## TODO - add these to process_q:
+  ## ## Runoff coefficient
+  ## QYEAR = indices_q[[8]] * 365 / 1000000 * 86400
+  ## RRa = QYEAR / indices_p[[1]]
+  ## CumQ[,2] = CumQ[,2] / 1000000 * 86400
+  ## if (is.na(QYEAR)) {
+  ##   QYEAR = mean(DQ[,2]) / 1000000 * 86400
+  ## }
+  ## RRl = mean(DQ[,2]) / 1000000 * 86400 / (mean(DP[,2]))
+  ## ## Monthly discharge in mm
+  ## MDays = c(31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31)
+  ## QM = QM * MDays / 1000000 * 86400
+  ## RRm = sum(QM) / sum(PM)
+  indices <- c(indices_p, indices_q)
+  attr(x, "indices") <- indices
+  x
 }
 
 process_p <- function(x, ...) {
@@ -108,8 +52,8 @@ process_p <- function(x, ...) {
   ## Number of days with zero precipitation
   x_daily <- aggregate_daily(x)
   DayP <- x_daily$Event %>% as.numeric() %>% na.omit()
-  k <- length(P)
-  ZeroP <- P[P == 0]
+  k <- length(DayP)
+  ZeroP <- DayP[DayP == 0]
   DayP0 <- floor(365 * length(ZeroP) / k)
   PP0 <- DayP0 / 365
 
@@ -176,50 +120,6 @@ compute_idc <- function(x, ...) {
 }
 
 process_q <- function(x, normalize = FALSE, ...) {
-  ## [Indices] = iMHEA_ProcessQ(Date,Q,A,flags) calculates streamflow indices.
-  ##
-  ## Input:
-  ## Date = dd/mm/yyyy hh:mm:ss [date format].
-  ## Q = Discharge [l/s].
-  ## A = Catchment area [km2] (Optional).
-  ## flag1 = leave empty NOT to graph discharge plots.
-  ## flag2 = leave empty NOT to graph baseflow plots.
-  ##
-  ## Output: [l/s/km2 if Area was input, or l/s otherwise].
-  ## IndicesQ = Vector with iMHEA's Hydrological Indices for Discharge.
-  ##           Low flows:
-  ##               QDMin = Minimum daily flow [l/s].
-  ##               Q95   = 05th percentile [l/s].
-  ##               DayQ0 = Days with zero flow per year [-].
-  ##               PQ0   = Proportion of days with zero flow per year [-].
-  ##               QMDry = Mean daily flow of driest month [l/s].
-  ##           High flows:
-  ##               QDMax = Maximum Daily flow [l/s].
-  ##               Q10   = 90th percentile [l/s].
-  ##           Mean flows:
-  ##               QDMY  = Annual Mean Daily flow [l/s].
-  ##               QDML  = Long-term Mean Daily flow [l/s].
-  ##               Q50   = 50th percentile [l/s].
-  ##           Regulation:
-  ##               BFI1   = Baseflow index from UK handbook [-].
-  ##               k1     = Recession constant from UK handbook [-].
-  ##               BFI2   = Baseflow index 2-parameter algorithm [-].
-  ##               k2     = Recession constant 2-parameter algorithm [-].
-  ##               Range = Discharge range [-] Qmax/Qmin.
-  ##               R2FDC = Slope of the FDC between 33%-66% / Mean flow [-].
-  ##               IRH   = Hydrological Regulation Index [-].
-  ##               RBI1  = Richards-Baker annual flashiness index [-].
-  ##               RBI2  = Richards-Baker seasonal flashiness index [-].
-  ##               DRYQMEAN = Min monthly flow / Mean monthly flow [-].
-  ##               DRYQWET  = Min monthly flow / Max monthly flow [-].
-  ##               SINDQ = Seasonality Index in flows [-].
-  ## QM = Monthly Mean Daily flow (l/s) per month number [Jan=1, Dec=12].
-  ## FDC  = Flow Duration Curve [l/s v %].
-  ## CumQ = Date and Cumulative Discharge [l/s].
-  ## DQ   = Daily Discharge only when data exist [date v l/s], including:
-  ##        BQ: Baseflow [l/s].
-  ##        SQ: Stormflow [l/s].
-
   area <- attr(x, "area") %>% set_units(m2)
   if (normalize)
     x <- x %>% mutate(Q = Q / area)
@@ -229,6 +129,10 @@ process_q <- function(x, normalize = FALSE, ...) {
   x_monthly <- aggregate_monthly(x)
   x_annual <- aggregate_annual(x)
 
+  QDMin <- x_daily$Q %>% min(na.rm = TRUE)
+  QDMax <- x_daily$Q %>% max(na.rm = TRUE)
+  QDML <- x_daily$Q %>% mean(na.rm = TRUE)
+  RANGE <- QDMax / QDMin
   Q <- x$Q %>% as.numeric() %>% na.omit()
   ZeroQ <- sum(Q == 0, na.rm = TRUE)
   DayQ0 <- floor(365 * ZeroQ / length(Q))
@@ -265,38 +169,13 @@ process_q <- function(x, normalize = FALSE, ...) {
   auxFDC[fdc$Exceedance_Pct < 50] = Q50
   IRH <- sum(auxFDC) / sum(fdc$Q)
 
-  ## % Baseflow index at daily scale.
-  ## if nargin >= 5
-  ##     [~,BQ1,SQ1,BFI1,k1] = iMHEA_BaseFlowUK(Date,Q,1,1); % Gustard et al., 1992
-  ##     [~,~,BFI2,k2] = iMHEA_BaseFlow(NewDate,NewQ,1); % Chapman, 1999
-  ## else
-  ##     [~,BQ1,SQ1,BFI1,k1] = iMHEA_BaseFlowUK(Date,Q,1); % Gustard et al., 1992
-  ##     [~,~,BFI2,k2] = iMHEA_BaseFlow(NewDate,NewQ); % Chapman, 1999
-  ## end
-
-  ## Need to return:
-  ## * Baseflow
-  ## * Stormflow
-  ## * Baseflow index
-  ## * Recession constant (k)
-
-  ## FIXME add k, BFI to metadata
-  x_daily <- baseflow_ukih(x_daily) # TODO also return SQ
-  k_ukih <- compute_recession_constant(x_daily$Date, x_daily$Qb_UKIH)
-  bfi_ukih <- compute_baseflow_index(x_daily$Date, x_daily$Q, x_daily$Qb_UKIH)
-  ## FIXME baseflow_ukih not returning catchment object
-  x_daily <- baseflow_chapman(x_daily)
-  ## Vb = nansum(BQ(DDate>=nDate(1) & DDate<=nDate(end)));
-  ## Va = nansum(DQ1(DDate>=nDate(1) & DDate<=nDate(end)));
-  ## BFI = Vb/Va;
-  ## bfi <- sum(bf) / sum(x_daily$Q, na.rm = TRUE)
-
-  BQ1 <- NA
-  SQ1 <- NA
-  BFI1 <- NA
-  k1 <- NA
-  BFI2 <- NA
-  k2 <- NA
+  ## Compute baseflow using daily data
+  BQ1 <- baseflow(x_daily$Date, x_daily$Q, method = "UKIH")
+  BFI1 <- compute_baseflow_index(x_daily$Date, x_daily$Q, Qb_UKIH)
+  k1 <- compute_recession_constant(x_daily$Date, Qb_UKIH)
+  BQ2 <- baseflow(x_daily$Date, x_daily$Q, method = "Chapman1999")
+  BFI2 <- compute_baseflow_index(x_daily$Date, x_daily$Q, Qb_Chapman)
+  k2 <- compute_recession_constant(x_daily$Date, x_daily$Q, n_day = 7)
 
   ## Richards-Baker flashiness index (RBI).
   ## FIXME - minimum data availability?
@@ -307,7 +186,7 @@ process_q <- function(x, normalize = FALSE, ...) {
   Qi_2 = 0.5 * (Qi_1[1:(n_day - 1)] + Qi_1[2:n_day])
   RBI2 = sum(Qi_2, na.rm = TRUE) / sum(DQ[2:(n_day - 1)], na.rm = TRUE)
 
-  IndicesQ <- list(QDMin = QDMin,
+  indicesQ <- list(QDMin = QDMin,
                    Q95 = Q95,
                    DayQ0 = DayQ0,
                    PQ0 = PQ0,
@@ -327,8 +206,8 @@ process_q <- function(x, normalize = FALSE, ...) {
                    RBI1 = RBI1,
                    DRYQMEAN = DRYQMEAN,
                    DRYQWET = DRYQWET,
-                   SINDQ = SINDQ)
-  IndicesQ
+                   SINDQ = SI)
+  indicesQ
 }
 
 compute_fdc <- function(x, ...) {
@@ -346,120 +225,120 @@ compute_fdc <- function(x, ...) {
   tibble(Exceedance_Pct = pct_out, Q = Q_out)
 }
 
-monthly_flow <- function(Date, Q) {
-  ## %iMHEA Calculation of monthly and annual Discharge averages.
-  ## % [Q_Month,Q_Year,Q_Avg_Month,Q_Avg_Year,Q_Matrix] =
-  ## % iMHEA_MonthlyRain(Date,Q,flag).
-  ## %
-  ## % Input:
-  ## % Date = dd/mm/yyyy hh:mm:ss [date format].
-  ## % Q    = Discharge [l/s or l/s/km2].
-  ## % flag = leave empty NOT to graph plots.
-  ## %
-  ## % Output:
-  ## % Q_Month     = Time series of monthly discharge [l/s or l/s/km2].
-  ## % Q_Year      = Time series of annual discharge [year and l/s or l/s/km2].
-  ## % Q_Avg_Month = 12 average monthly discharge values [l/s or l/s/km2].
-  ## % Q_Avg_Year  = Annual discharge value [l/s or l/s/km2].
-  ## % Q_Matrix    = Matrix of discharge data (Year vs Months) [l/s or l/s/km2].
-  ## % Q_Min_Year  = Time series of minimum annual precipitation [year and mm].
-  ## % Q_Max_Year  = Time series of maximum annual precipitation [year and mm].
-  ## %
-  ## % Boris Ochoa Tocachi
-  ## % Imperial College London
-  ## % Created in September, 2017
-  ## % Last edited in November, 2017
+## monthly_flow <- function(Date, Q) {
+##   ## %iMHEA Calculation of monthly and annual Discharge averages.
+##   ## % [Q_Month,Q_Year,Q_Avg_Month,Q_Avg_Year,Q_Matrix] =
+##   ## % iMHEA_MonthlyRain(Date,Q,flag).
+##   ## %
+##   ## % Input:
+##   ## % Date = dd/mm/yyyy hh:mm:ss [date format].
+##   ## % Q    = Discharge [l/s or l/s/km2].
+##   ## % flag = leave empty NOT to graph plots.
+##   ## %
+##   ## % Output:
+##   ## % Q_Month     = Time series of monthly discharge [l/s or l/s/km2].
+##   ## % Q_Year      = Time series of annual discharge [year and l/s or l/s/km2].
+##   ## % Q_Avg_Month = 12 average monthly discharge values [l/s or l/s/km2].
+##   ## % Q_Avg_Year  = Annual discharge value [l/s or l/s/km2].
+##   ## % Q_Matrix    = Matrix of discharge data (Year vs Months) [l/s or l/s/km2].
+##   ## % Q_Min_Year  = Time series of minimum annual precipitation [year and mm].
+##   ## % Q_Max_Year  = Time series of maximum annual precipitation [year and mm].
+##   ## %
+##   ## % Boris Ochoa Tocachi
+##   ## % Imperial College London
+##   ## % Created in September, 2017
+##   ## % Last edited in November, 2017
 
-  Years = year(Date)
-  n = max(Years) - min(Years) + 1 # Number of years
-  Months = month(Date)
+##   Years = year(Date)
+##   n = max(Years) - min(Years) + 1 # Number of years
+##   Months = month(Date)
 
-  Q_Year = rep(0, n)
-  Q_YMin = matrix(data = 0, nrow = n, ncol = 2)
-  Q_YMax = matrix(data = 0, nrow = n, ncol = 2)
-  matrixQM1 = matrix(data = 0, nrow = 12, ncol = 1)
-  sizeQM1 = matrix(data = 0, nrow = 12, ncol = 1)
+##   Q_Year = rep(0, n)
+##   Q_YMin = matrix(data = 0, nrow = n, ncol = 2)
+##   Q_YMax = matrix(data = 0, nrow = n, ncol = 2)
+##   matrixQM1 = matrix(data = 0, nrow = 12, ncol = 1)
+##   sizeQM1 = matrix(data = 0, nrow = 12, ncol = 1)
 
-  for (i in 1:n) {
-    ## Annual mean
-    Q_Year[i] = mean(Q[Years == (min(Years) + i - 1)])
-    ## Position of the annual minimum
-    MinPos = which.min(Q[Years == (min(Years) + i - 1)])
-    Q_YMin[i, 1] = Q[Years == (min(Years) + i - 1)][MinPos]
-    Q_YMin[i, 2] = lubridate::yday(Date[MinPos])
-    MaxPos = which.max(Q[Years == (min(Years) + i - 1)])
-    Q_YMax[i, 1] = Q[Years == (min(Years) + i - 1)][MaxPos]
-    Q_YMax[i, 2] = lubridate::yday(Date[MaxPos])
-    for (j in 1:12) {
-      matrixQM1[j, i] = sum(Q[Years == (min(Years) + i - 1) & Months == j])
-      sizeQM1[j, i] = length(Q[Years == (min(Years) + i - 1) & Months == j])
-    }
-  }
-  ## TODO Generate output variables
-  ## Q_Avg_Month = nansum(matrixQM1.*sizeQM1,2)./nansum(sizeQM1,2);
-  ## Q_Avg_Year = nanmean(Q_Year);
-  ## Q_Month = matrixQM1(:);
-  ## Q_Matrix = matrixQM1';
-  ## Q_Year = [(min(Years):max(Years))' , Q_Year];
-  ## Q_YMin = [(min(Years):max(Years))' , Q_YMin];
-  ## Q_YMax = [(min(Years):max(Years))' , Q_YMax];
-  ## TODO plot results
-}
+##   for (i in 1:n) {
+##     ## Annual mean
+##     Q_Year[i] = mean(Q[Years == (min(Years) + i - 1)])
+##     ## Position of the annual minimum
+##     MinPos = which.min(Q[Years == (min(Years) + i - 1)])
+##     Q_YMin[i, 1] = Q[Years == (min(Years) + i - 1)][MinPos]
+##     Q_YMin[i, 2] = lubridate::yday(Date[MinPos])
+##     MaxPos = which.max(Q[Years == (min(Years) + i - 1)])
+##     Q_YMax[i, 1] = Q[Years == (min(Years) + i - 1)][MaxPos]
+##     Q_YMax[i, 2] = lubridate::yday(Date[MaxPos])
+##     for (j in 1:12) {
+##       matrixQM1[j, i] = sum(Q[Years == (min(Years) + i - 1) & Months == j])
+##       sizeQM1[j, i] = length(Q[Years == (min(Years) + i - 1) & Months == j])
+##     }
+##   }
+##   ## TODO Generate output variables
+##   ## Q_Avg_Month = nansum(matrixQM1.*sizeQM1,2)./nansum(sizeQM1,2);
+##   ## Q_Avg_Year = nanmean(Q_Year);
+##   ## Q_Month = matrixQM1(:);
+##   ## Q_Matrix = matrixQM1';
+##   ## Q_Year = [(min(Years):max(Years))' , Q_Year];
+##   ## Q_YMin = [(min(Years):max(Years))' , Q_YMin];
+##   ## Q_YMax = [(min(Years):max(Years))' , Q_YMax];
+##   ## TODO plot results
+## }
 
-monthly_rain <- function(Date, P) {
-  ## % iMHEA Calculation of monthly and annual Precipitation averages.
-  ## % Input:
-  ## % Date = dd/mm/yyyy hh:mm:ss [date format].
-  ## % P    = Precipitation [mm].
-  ## % flag = leave empty NOT to graph plots.
-  ## %
-  ## % Output:
-  ## % P_Month     = Time series of monthly precipitation [mm].
-  ## % P_Year      = Time series of annual precipitation [year and mm].
-  ## % P_Avg_Month = 12 average monthly precipitation values [mm].
-  ## % P_Avg_Year  = Annual precipitation value [mm].
-  ## % P_Matrix    = Matrix of precipitation data (Year vs Months) [mm].
-  ## % P_Min_Year  = Time series of minimum annual discharge [year and l/s or l/s/km2].
-  ## % P_Max_Year  = Time series of maximum annual discharge [year and l/s or l/s/km2].
-  Years = format(Date, "%Y") %>% as.numeric
-  n = max(Years) - min(Years) + 1 # Number of years
-  Months = format(Date, "%m") %>% as.numeric
-  P_Year = rep(0, n)
-  P_YMax = matrix(data = 0, nrow = n, ncol = 2)
-  P_YMin = matrix(data = 0, nrow = n, ncol = 2)
-  matrixPM1 = rep(0, 12)
-  sizePM1 = rep(0, 12)
-  for (i in 1:n) {
-    ## Annual accumulation
-    P_Year[i] = sum(P[Years = min(Years) + i - 1])
-    ## Position of the annual minimum
-    MinPos = which.min(P[Years == (min(Years) + i - 1)])
-    P_YMin[i, 1] = P[Years == (min(Years) + i - 1)][MinPos]
-    P_YMin[i, 2] = lubridate::yday(Date[MinPos])
-    MaxPos = which.max(P[Years == (min(Years) + i - 1)])
-    P_YMax[i, 1] = P[Years == (min(Years) + i - 1)][MaxPos]
-    P_YMax[i, 2] = lubridate::yday(Date[MaxPos])
-    for (j in 1:12) {
-      matrixPM1[j, i] = sum(P[Years == (min(Years) + i - 1) & Months == j])
-      sizePM1[j, i] = length(P[Years == (min(Years) + i - 1) & Months == j])
-    }
-  }
+## monthly_rain <- function(Date, P) {
+##   ## % iMHEA Calculation of monthly and annual Precipitation averages.
+##   ## % Input:
+##   ## % Date = dd/mm/yyyy hh:mm:ss [date format].
+##   ## % P    = Precipitation [mm].
+##   ## % flag = leave empty NOT to graph plots.
+##   ## %
+##   ## % Output:
+##   ## % P_Month     = Time series of monthly precipitation [mm].
+##   ## % P_Year      = Time series of annual precipitation [year and mm].
+##   ## % P_Avg_Month = 12 average monthly precipitation values [mm].
+##   ## % P_Avg_Year  = Annual precipitation value [mm].
+##   ## % P_Matrix    = Matrix of precipitation data (Year vs Months) [mm].
+##   ## % P_Min_Year  = Time series of minimum annual discharge [year and l/s or l/s/km2].
+##   ## % P_Max_Year  = Time series of maximum annual discharge [year and l/s or l/s/km2].
+##   Years = format(Date, "%Y") %>% as.numeric
+##   n = max(Years) - min(Years) + 1 # Number of years
+##   Months = format(Date, "%m") %>% as.numeric
+##   P_Year = rep(0, n)
+##   P_YMax = matrix(data = 0, nrow = n, ncol = 2)
+##   P_YMin = matrix(data = 0, nrow = n, ncol = 2)
+##   matrixPM1 = rep(0, 12)
+##   sizePM1 = rep(0, 12)
+##   for (i in 1:n) {
+##     ## Annual accumulation
+##     P_Year[i] = sum(P[Years = min(Years) + i - 1])
+##     ## Position of the annual minimum
+##     MinPos = which.min(P[Years == (min(Years) + i - 1)])
+##     P_YMin[i, 1] = P[Years == (min(Years) + i - 1)][MinPos]
+##     P_YMin[i, 2] = lubridate::yday(Date[MinPos])
+##     MaxPos = which.max(P[Years == (min(Years) + i - 1)])
+##     P_YMax[i, 1] = P[Years == (min(Years) + i - 1)][MaxPos]
+##     P_YMax[i, 2] = lubridate::yday(Date[MaxPos])
+##     for (j in 1:12) {
+##       matrixPM1[j, i] = sum(P[Years == (min(Years) + i - 1) & Months == j])
+##       sizePM1[j, i] = length(P[Years == (min(Years) + i - 1) & Months == j])
+##     }
+##   }
 
-  ## P_Avg_Month = nansum(matrixPM1.*sizePM1,2)./nansum(sizePM1,2);
-  P_Avg_Month = NA # TODO
-  P_Avg_Year = mean(P_Year)
+##   ## P_Avg_Month = nansum(matrixPM1.*sizePM1,2)./nansum(sizePM1,2);
+##   P_Avg_Month = NA # TODO
+##   P_Avg_Year = mean(P_Year)
 
-  P_Month = matrixPM1 # TODO
-  P_Matrix = matrixPM1 # TODO
-  ## TODO plotting
-  list(P_Month = P_Month,
-       P_Year = P_Year,
-       P_Avg_Month = P_Avg_Month,
-       P_Avg_Year = P_Avg_Year,
-       P_Matrix = P_Matrix,
-       P_Min_Year = P_Min_Year,
-       P_Max_Year = P_Max_Year)
-}
+##   P_Month = matrixPM1 # TODO
+##   P_Matrix = matrixPM1 # TODO
+##   ## TODO plotting
+##   list(P_Month = P_Month,
+##        P_Year = P_Year,
+##        P_Avg_Month = P_Avg_Month,
+##        P_Avg_Year = P_Avg_Year,
+##        P_Matrix = P_Matrix,
+##        P_Min_Year = P_Min_Year,
+##        P_Max_Year = P_Max_Year)
+## }
 
 indices_plus <- function(Date, Q, A, normalize, ...) {
   ## % iMHEA Hydrological indices from Olden & Poff (2003).
