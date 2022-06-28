@@ -4,12 +4,12 @@
 \alias{baseflow}
 \title{Compute baseflow}
 \usage{
-baseflow(Date, Q, method = "UKIH")
+baseflow(Date, Q, method = "UKIH", ...)
 }
 \arguments{
-\item{x}{catchment.}
-
 \item{...}{Additional arguments.}
+
+\item{x}{catchment.}
 }
 \value{
 

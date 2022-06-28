@@ -2,10 +2,10 @@
 #'
 #' Create iMHEA catchment object.
 #'
-#' @param q stream_gauge
+#' @param x stream_gauge
 #' @param ... rain_gauge objects.
 #' @param id character.
-#' @param area units
+#' @param ar units
 #'
 #' @return A catchment object
 #'
@@ -13,8 +13,15 @@
 #' \dontrun{
 #' sum(1:10)
 #' }
-catchment <- function(q, ..., id, area) {
-  stopifnot(inherits(area, "units"))
+catchment <- function(x, ..., id = NA, ar = NA) {
+  UseMethod("catchment")
+}
+
+#' @export
+catchment.stream_gauge <- function(x, ..., id = NA, ar = NA) {
+  stopifnot(!is.na(id))
+  stopifnot(!is.na(ar))
+  stopifnot(inherits(ar, "units"))
   ## TODO include additional metadata
   ## gauges <- list(...)
   p_merged <- infill_precip(..., new_id = id)
@@ -24,14 +31,24 @@ catchment <- function(q, ..., id, area) {
     update_tsibble(key = ID_new) %>%
     dplyr::select(-ID) %>%
     rename(ID = ID_new)
-  q <- q %>%
+  q <- x %>%
     mutate(ID_new = id, .before = ID) %>%
     update_tsibble(key = ID_new) %>%
     dplyr::select(-ID) %>%
     rename(ID = ID_new)
   x <- q %>% full_join(p_merged, by = c("ID", "Date"))
   class(x) <- c("catchment", class(x))
-  attr(x, "area") <- set_units(area, km^2)
+  ## attr(x, "area") <- set_units(area, km^2)
+  area(x) <- set_units(ar, km^2)
+  x <- x %>% update_indices()
+  x
+}
+
+#' @export
+catchment.tbl_ts <- function(x, ..., id = NA, ar = NA) {
+  ## TODO check validity?
+  class(x) <- c("catchment", class(x))
+  area(x) <- set_units(ar, km^2)
   x <- x %>% update_indices()
   x
 }

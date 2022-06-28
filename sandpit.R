@@ -175,7 +175,7 @@ catchment_area <-
 
 x <- catchment(
   q1, p1, p2, id = catchment_id,
-  area = set_units(catchment_area, km^2)
+  ar = set_units(catchment_area, km^2)
 )
 x_daily <- x %>% aggregate_daily()
 x_hourly <- x %>% aggregate_hourly()

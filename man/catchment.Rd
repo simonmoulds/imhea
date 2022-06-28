@@ -4,16 +4,16 @@
 \alias{catchment}
 \title{Create catchment object}
 \usage{
-catchment(q, ..., id, area)
+catchment(x, ..., id = NA, ar = NA)
 }
 \arguments{
-\item{q}{stream_gauge}
+\item{x}{stream_gauge}
 
 \item{...}{rain_gauge objects.}
 
 \item{id}{character.}
 
-\item{area}{units}
+\item{ar}{units}
 }
 \value{
 A catchment object

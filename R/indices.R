@@ -12,8 +12,9 @@
 #' sum(1:10)
 #' }
 update_indices <- function(x, ...) {
-  indices_p <- process_p(x)
-  indices_q <- process_q(x)
+  indices_p <- process_p(as_tsibble(x))
+  area <- area(x)
+  indices_q <- process_q(as_tsibble(x), area)
   ## indices_climate
   ## indices_plus
   ## TODO - add indices to object
@@ -33,6 +34,49 @@ update_indices <- function(x, ...) {
   indices <- c(indices_p, indices_q)
   attr(x, "indices") <- indices
   x
+}
+
+#' @export
+`indices<-` <- function(x, value) {
+  UseMethod('indices<-')
+}
+
+#' @export
+`indices<-.catchment` <- function(x, value) {
+  attr(x, "indices") <- value
+  x
+}
+
+#' @export
+indices <- function(x) {
+  UseMethod("indices")
+}
+
+#' @export
+indices.catchment <- function(x) {
+  attr(x, "indices")
+}
+
+#' @export
+`area<-` <- function(x, value) {
+  UseMethod('area<-')
+}
+
+#' @export
+`area<-.catchment` <- function(x, value) {
+  stopifnot(inherits(value, "units"))
+  attr(x, "area") <- value
+  x
+}
+
+#' @export
+area <- function(x) {
+  UseMethod("area")
+}
+
+#' @export
+area.catchment <- function(x) {
+  attr(x, "area")
 }
 
 process_p <- function(x, ...) {
@@ -80,7 +124,6 @@ process_p <- function(x, ...) {
   idc = compute_idc(x) # TODO
   iM15m = idc[idc$D == set_units(15, minute), 2, drop = TRUE]
   iM1hr = idc[idc$D == set_units(60, minute), 2, drop = TRUE]
-
   ## Add to list
   ## TODO - add directly to object?
   indicesP = list(PYear = PYear,
@@ -119,8 +162,8 @@ compute_idc <- function(x, ...) {
   idc
 }
 
-process_q <- function(x, normalize = FALSE, ...) {
-  area <- attr(x, "area") %>% set_units(m2)
+process_q <- function(x, area, normalize = FALSE, ...) {
+  area <- set_units(area, m2)
   if (normalize)
     x <- x %>% mutate(Q = Q / area)
 
