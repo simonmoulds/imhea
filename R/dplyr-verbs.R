@@ -20,6 +20,12 @@ dplyr_row_slice.catchment <- function(data, i, ..., preserve = FALSE) {
 dplyr_col_modify.catchment <- function(data, cols) {
   res <- NextMethod()
   ## TODO only update if cols contains Q, H, Event
+  cols_used <- attr(cols, "used")
+  updated_cols <- names(cols_used)[cols_used]
+  update_metadata <- FALSE
+  if (any(updated_cols %in% c("Q", "H", "Event")))
+    update_metadata <- TRUE
+  ## out <- build_catchment(res, data, update_metadata)
   out <- update_meta(res, data)
   out
 }
@@ -27,6 +33,8 @@ dplyr_col_modify.catchment <- function(data, cols) {
 #' @export
 `names<-.catchment` <- function(x, value) {
   res <- NextMethod()
+  ## build_catchment(x)
+  ## TODO check_validity
   new_tsibble(res, "area" = area(x), "indices" = indices(x), class = "catchment")
 }
 
@@ -82,7 +90,10 @@ dplyr_reconstruct.catchment <- function(data, template) {
 ## }
 
 # put new data with existing attributes (update key)
-update_meta <- function(new, old, ordered = TRUE, interval = TRUE,
+update_meta <- function(new,
+                        old,
+                        ordered = TRUE,
+                        interval = TRUE,
                         validate = FALSE) {
   ## if (validate) {
   ##   retain_tsibble(new, key = key_vars(old), index = index(old))
@@ -91,3 +102,7 @@ update_meta <- function(new, old, ordered = TRUE, interval = TRUE,
   new <- as_tsibble(new) # this will validate the tsibble object
   catchment(new, ar = area(old))
 }
+
+## build_catchment <- function(new, old, update_metadata, ...) {
+##   NULL
+## }

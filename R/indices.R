@@ -3,6 +3,7 @@
 #' TODO
 #'
 #' @param x catchment.
+#' @param area units.
 #' @param ... Additional arguments.
 #'
 #' @return TODO
@@ -11,28 +12,15 @@
 #' \dontrun{
 #' sum(1:10)
 #' }
-update_indices <- function(x, ...) {
+update_indices <- function(x, area, ...) {
+  UseMethod("update_indices")
+}
+
+#' @export
+update_indices.tbl_ts <- function(x, area, ...) {
   indices_p <- process_p(as_tsibble(x))
-  area <- area(x)
   indices_q <- process_q(as_tsibble(x), area)
-  ## indices_climate
-  ## indices_plus
-  ## TODO - add indices to object
-  ## TODO - add these to process_q:
-  ## ## Runoff coefficient
-  ## QYEAR = indices_q[[8]] * 365 / 1000000 * 86400
-  ## RRa = QYEAR / indices_p[[1]]
-  ## CumQ[,2] = CumQ[,2] / 1000000 * 86400
-  ## if (is.na(QYEAR)) {
-  ##   QYEAR = mean(DQ[,2]) / 1000000 * 86400
-  ## }
-  ## RRl = mean(DQ[,2]) / 1000000 * 86400 / (mean(DP[,2]))
-  ## ## Monthly discharge in mm
-  ## MDays = c(31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31)
-  ## QM = QM * MDays / 1000000 * 86400
-  ## RRm = sum(QM) / sum(PM)
-  indices <- c(indices_p, indices_q)
-  attr(x, "indices") <- indices
+  indices(x) <- c(indices_p, indices_q)
   x
 }
 
@@ -42,7 +30,7 @@ update_indices <- function(x, ...) {
 }
 
 #' @export
-`indices<-.catchment` <- function(x, value) {
+`indices<-.tbl_ts` <- function(x, value) {
   attr(x, "indices") <- value
   x
 }
@@ -214,10 +202,10 @@ process_q <- function(x, area, normalize = FALSE, ...) {
 
   ## Compute baseflow using daily data
   BQ1 <- baseflow(x_daily$Date, x_daily$Q, method = "UKIH")
-  BFI1 <- compute_baseflow_index(x_daily$Date, x_daily$Q, Qb_UKIH)
-  k1 <- compute_recession_constant(x_daily$Date, Qb_UKIH)
+  BFI1 <- compute_baseflow_index(x_daily$Date, x_daily$Q, BQ1)
+  k1 <- compute_recession_constant(x_daily$Date, BQ1)
   BQ2 <- baseflow(x_daily$Date, x_daily$Q, method = "Chapman1999")
-  BFI2 <- compute_baseflow_index(x_daily$Date, x_daily$Q, Qb_Chapman)
+  BFI2 <- compute_baseflow_index(x_daily$Date, x_daily$Q, BQ2)
   k2 <- compute_recession_constant(x_daily$Date, x_daily$Q, n_day = 7)
 
   ## Richards-Baker flashiness index (RBI).

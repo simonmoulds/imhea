@@ -23,7 +23,10 @@ catchment.stream_gauge <- function(x, ..., id = NA, ar = NA) {
   stopifnot(!is.na(ar))
   stopifnot(inherits(ar, "units"))
   ## TODO include additional metadata
+  ## TODO allow for the fact that there may not be any
+  ## precipitation gauges in the catchment
   ## gauges <- list(...)
+  ## if (length(gauges) > 0) { }
   p_merged <- infill_precip(..., new_id = id)
   ## q <- aggregate(q, timescale = timescale)
   p_merged <- p_merged %>%
@@ -37,10 +40,11 @@ catchment.stream_gauge <- function(x, ..., id = NA, ar = NA) {
     dplyr::select(-ID) %>%
     rename(ID = ID_new)
   x <- q %>% full_join(p_merged, by = c("ID", "Date"))
+  ar <- set_units(ar, km^2)
+  x <- update_indices(x, ar)
   class(x) <- c("catchment", class(x))
   ## attr(x, "area") <- set_units(area, km^2)
-  area(x) <- set_units(ar, km^2)
-  x <- x %>% update_indices()
+  area(x) <- ar
   x
 }
 
@@ -51,6 +55,11 @@ catchment.tbl_ts <- function(x, ..., id = NA, ar = NA) {
   area(x) <- set_units(ar, km^2)
   x <- x %>% update_indices()
   x
+}
+
+#' @export
+has_precipitation <- function(x, ...) {
+  any(stringr::str_starts(names(x, "Event")))
 }
 
 #' @export
