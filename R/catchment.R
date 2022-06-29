@@ -13,15 +13,15 @@
 #' \dontrun{
 #' sum(1:10)
 #' }
-catchment <- function(x, ..., id = NA, ar = NA) {
+catchment <- function(x, ..., id = NA, area = NA) {
   UseMethod("catchment")
 }
 
 #' @export
-catchment.stream_gauge <- function(x, ..., id = NA, ar = NA) {
+catchment.stream_gauge <- function(x, ..., id = NA, area = NA) {
   stopifnot(!is.na(id))
-  stopifnot(!is.na(ar))
-  stopifnot(inherits(ar, "units"))
+  stopifnot(!is.na(area))
+  stopifnot(inherits(area, "units"))
   ## TODO include additional metadata
   ## TODO allow for the fact that there may not be any
   ## precipitation gauges in the catchment
@@ -40,12 +40,15 @@ catchment.stream_gauge <- function(x, ..., id = NA, ar = NA) {
     dplyr::select(-ID) %>%
     rename(ID = ID_new)
   x <- q %>% full_join(p_merged, by = c("ID", "Date"))
-  ar <- set_units(ar, km^2)
-  x <- update_indices(x, ar)
-  class(x) <- c("catchment", class(x))
-  ## attr(x, "area") <- set_units(area, km^2)
-  area(x) <- ar
-  x
+  ## Convert units to km^2
+  catchment_area <- set_units(area, km^2)
+  ## Compute indices
+  catchment_indices <- compute_indices(x, area)
+  ## class(x) <- c("catchment", class(x))
+  new_tsibble(
+    x, "area" = catchment_area,
+    "indices" = catchment_indices, class = "catchment"
+  )
 }
 
 #' @export
@@ -55,6 +58,10 @@ catchment.tbl_ts <- function(x, ..., id = NA, ar = NA) {
   area(x) <- set_units(ar, km^2)
   x <- x %>% update_indices()
   x
+}
+
+check_validity <- function(x) {
+  TRUE
 }
 
 #' @export

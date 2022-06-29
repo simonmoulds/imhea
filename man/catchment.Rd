@@ -4,7 +4,7 @@
 \alias{catchment}
 \title{Create catchment object}
 \usage{
-catchment(x, ..., id = NA, ar = NA)
+catchment(x, ..., id = NA, area = NA)
 }
 \arguments{
 \item{x}{stream_gauge}

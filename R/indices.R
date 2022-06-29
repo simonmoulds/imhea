@@ -12,16 +12,18 @@
 #' \dontrun{
 #' sum(1:10)
 #' }
-update_indices <- function(x, area, ...) {
-  UseMethod("update_indices")
+compute_indices <- function(x, area, ...) {
+  UseMethod("compute_indices")
 }
 
 #' @export
-update_indices.tbl_ts <- function(x, area, ...) {
+compute_indices.tbl_ts <- function(x, area, ...) {
   indices_p <- process_p(as_tsibble(x))
   indices_q <- process_q(as_tsibble(x), area)
-  indices(x) <- c(indices_p, indices_q)
-  x
+  ## indices(x) <- c(indices_p, indices_q)
+  ## x
+  indices <- c(indices_p, indices_q)
+  indices
 }
 
 #' @export
