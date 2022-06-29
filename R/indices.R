@@ -17,9 +17,9 @@ compute_indices <- function(x, area, ...) {
 }
 
 #' @export
-compute_indices.tbl_ts <- function(x, area, ...) {
-  indices_p <- process_p(as_tsibble(x))
-  indices_q <- process_q(as_tsibble(x), area)
+compute_indices.tbl_ts <- function(x, area, summary_data, ...) {
+  indices_p <- process_p(x, summary_data)
+  indices_q <- process_q(x, area, summary_data)
   indices <- c(indices_p, indices_q)
   indices
 }
@@ -67,7 +67,7 @@ area.catchment <- function(x) {
   attr(x, "area")
 }
 
-process_p <- function(x, ...) {
+process_p <- function(x, summary_data, ...) {
   ## IndicesP = Vector with iMHEA's Hydrological Indices for Precipitation.
   ##            PYear = Annual precipitation [mm].
   ##            DayP0 = Number of days with zero precipitation per year [day].
@@ -92,7 +92,10 @@ process_p <- function(x, ...) {
                 iM1hr = NA))
 
   ## Number of days with zero precipitation
-  x_daily <- aggregate_daily(x)
+  x_daily <- summary_data$daily
+  x_monthly <- summary_data$monthly
+  idc <- summary_data$IDC
+
   DayP <- x_daily$Event %>% as.numeric() %>% na.omit()
   k <- length(DayP)
   ZeroP <- DayP[DayP == 0]
@@ -100,7 +103,7 @@ process_p <- function(x, ...) {
   PP0 <- DayP0 / 365
 
   ## Monthly/annual salaries
-  x_monthly <- aggregate_monthly(x)
+  ## x_monthly <- aggregate_monthly(x)
   PM <- x_monthly %>%
     as_tibble() %>%
     mutate(Month = month(Date)) %>%
@@ -119,7 +122,7 @@ process_p <- function(x, ...) {
   SI <- (1 / PYear) * (sum(abs(PM - PYear / 12))) * 6 / 11
 
   ## Maximum intensity duration curve
-  idc = compute_idc(x) # TODO
+  ## idc = compute_idc(x) # TODO
   iM15m = idc[idc$D == set_units(15, minute), 2, drop = TRUE]
   iM1hr = idc[idc$D == set_units(60, minute), 2, drop = TRUE]
   ## Add to list
@@ -160,15 +163,19 @@ compute_idc <- function(x, ...) {
   idc
 }
 
-process_q <- function(x, area, normalize = FALSE, ...) {
+process_q <- function(x, area, summary_data, normalize = FALSE, ...) {
   area <- set_units(area, m2)
   if (normalize)
     x <- x %>% mutate(Q = Q / area)
 
   ## TODO enforce minimum data availability
-  x_daily <- aggregate_daily(x)
-  x_monthly <- aggregate_monthly(x)
-  x_annual <- aggregate_annual(x)
+  x_daily <- summary_data$daily
+  x_monthly <- summary_data$monthly
+  x_annual <- summary_data$annual
+  fdc <- summary_data$FDC
+  ## x_daily <- aggregate_daily(x)
+  ## x_monthly <- aggregate_monthly(x)
+  ## x_annual <- aggregate_annual(x)
 
   QDMin <- x_daily$Q %>% min(na.rm = TRUE)
   QDMax <- x_daily$Q %>% max(na.rm = TRUE)
@@ -195,7 +202,7 @@ process_q <- function(x, area, normalize = FALSE, ...) {
   SI <- (1 / (12 * QDMY)) * (sum(abs(QM$Q - QDMY))) * 6 / 11
 
   ## Flow Duration Curve, FDC Slope, and IRH.
-  fdc <- compute_fdc(x)
+  ## fdc <- compute_fdc(x)
   Q95 <- fdc$Q[fdc$Exceedance_Pct %in% 95]
   Q75 <- fdc$Q[fdc$Exceedance_Pct %in% 75]
   Q66 <- fdc$Q[fdc$Exceedance_Pct %in% 66]

@@ -1,37 +1,35 @@
 #' @export
-as_catchment <- function(x, ...) {
+as_catchment <- function(x, area, ...) {
   UseMethod("as_catchment")
 }
 
 #' @keywords internal
 #' @export
-as_catchment.tbl_ts <- function(x, ...) {
-  build_catchment(x, area, update_metadata = TRUE, ...)
+as_catchment.tbl_ts <- function(x, area, ...) {
+  build_catchment(x, update_metadata = TRUE, ...)
 }
 
 #' @export
 dplyr_row_slice.catchment <- function(data, i, ..., preserve = FALSE) {
   res <- NextMethod()
-  build_catchment(res, area(data), indices(data), update_metadata = FALSE)
+  build_catchment(res, area(data), indices(data), summary_data(data), update_metadata = FALSE)
 }
 
 #' @export
 dplyr_col_modify.catchment <- function(data, cols) {
   res <- NextMethod()
-  ## TODO only update if cols contains Q, H, Event
   cols_used <- attr(cols, "used")
   updated_cols <- names(cols_used)[cols_used]
   update_metadata <- FALSE
   if (any(updated_cols %in% c("Q", "H", "Event")))
     update_metadata <- TRUE
-  out <- build_catchment(res, area(data), indices(data), update_metadata)
-  out
+  build_catchment(res, area(data), indices(data), summary_data(data), update_metadata)
 }
 
 #' @export
 `names<-.catchment` <- function(x, value) {
   res <- NextMethod()
-  build_catchment(res, area(x), indices(x), update_metadata = FALSE)
+  build_catchment(res, area(x), indices(x), summary_data(x), update_metadata = FALSE)
 }
 
 #' @importFrom dplyr group_by_drop_default
@@ -58,9 +56,7 @@ dplyr_reconstruct.catchment <- function(data, template) {
   ## template <- rename_join_tsibble(data, template)
   ## check_validity
   res <- NextMethod()
-  area <- area(template)
-  indices <- indices(template)
-  build_catchment(x, area, indices, update_metadata = TRUE)
+  build_catchment(x, area(template), indices(template), summary_data(template), update_metadata = TRUE)
 }
 
 ## #' export

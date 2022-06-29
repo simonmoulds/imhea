@@ -522,23 +522,25 @@ aggregate_daily <- function(x, ...) {
   UseMethod("aggregate_daily")
 }
 
-#' @export
-aggregate_daily.catchment <- function(x, ...) {
-  x_daily <-
-    x %>%
-    mutate(across(any_of(c("Q", "H", "Event")), as.numeric)) %>%
-    group_by_key() %>%
-    index_by(NewDate = ~ as_date(.)) %>%
-    summarize(
-      ## n = sum(is.na(Q)),
-      Q = mean(Q),
-      H = mean(H),
-      Event = sum(Event, na.rm = TRUE)
-    ) %>%
-    rename(Date = NewDate)
-  ## class(x_daily) <- c("catchment", class(x))
-  x_daily
-}
+## #' @export
+## aggregate_daily.catchment <- function(x, ...) {
+##   x_daily <-
+##     x %>%
+##     mutate(across(any_of(c("Q", "H", "Event")), as.numeric)) %>%
+##     group_by_key() %>%
+##     index_by(NewDate = ~ as_date(.)) %>%
+##     summarize(
+##       ## n = sum(is.na(Q)),
+##       across(any_of(c("Event")), sum, na.rm = TRUE),
+##       across(any_of(c("Q", "H")), mean, na.rm = TRUE)
+##       ## Q = mean(Q),
+##       ## H = mean(H),
+##       ## Event = sum(Event, na.rm = TRUE)
+##     ) %>%
+##     rename(Date = NewDate)
+##   ## class(x_daily) <- c("catchment", class(x))
+##   x_daily
+## }
 
 #' @export
 aggregate_daily.tbl_ts <- function(x, ...) {
@@ -548,8 +550,8 @@ aggregate_daily.tbl_ts <- function(x, ...) {
     group_by_key() %>%
     index_by(NewDate = ~ as_date(.)) %>%
     summarize(
-      across(any_of(c("Event")), sum),
-      across(any_of(c("Q", "H")), mean)
+      across(any_of(c("Event")), sum, na.rm = TRUE),
+      across(any_of(c("Q", "H")), mean, na.rm = TRUE)
     ) %>%
     rename(Date = NewDate)
   x_daily
@@ -569,34 +571,32 @@ aggregate_hourly <- function(x, ...) {
   UseMethod("aggregate_hourly")
 }
 
-#' @export
-aggregate_hourly.catchment <- function(x, ...) {
-  x_hourly <-
-    x %>%
-    mutate(across(any_of(c("Q", "H", "Event")), as.numeric)) %>%
-    group_by_key() %>%
-    index_by(NewDate = ~ ceiling_date(., unit = "1 hour")) %>%
-    summarize(
-      ## n = sum(is.na(Q)),
-      Q = mean(Q),
-      H = mean(H),
-      Event = sum(Event, na.rm = TRUE)
-    ) %>%
-    rename(Date = NewDate)
-  class(x_hourly) <- c("catchment", class(x))
-  x_hourly
-}
+## #' @export
+## aggregate_hourly.catchment <- function(x, ...) {
+##   x_hourly <-
+##     x %>%
+##     mutate(across(any_of(c("Q", "H", "Event")), as.numeric)) %>%
+##     group_by_key() %>%
+##     index_by(NewDate = ~ ceiling_date(., unit = "1 hour")) %>%
+##     summarize(
+##       ## n = sum(is.na(Q)),
+##       across(any_of(c("Event")), sum, na.rm = TRUE),
+##       across(any_of(c("Q", "H")), mean, na.rm = TRUE)
+##     ) %>%
+##     rename(Date = NewDate)
+##   x_hourly
+## }
 
 #' @export
 aggregate_hourly.tbl_ts <- function(x, ...) {
   x_hourly <-
-    x %>%
+    xx %>%
     mutate(across(any_of(c("Q", "H", "Event")), as.numeric)) %>%
     group_by_key() %>%
     index_by(NewDate = ~ ceiling_date(., unit = "1 hour")) %>%
     summarize(
-      across(any_of(c("Event")), sum),
-      across(any_of(c("Q", "H")), mean)
+      across(any_of(c("Event")), sum, na.rm = TRUE),
+      across(any_of(c("Q", "H")), mean, na.rm = TRUE)
     ) %>%
     rename(Date = NewDate)
   x_hourly
@@ -615,23 +615,25 @@ aggregate_monthly <- function(x, ...) {
   UseMethod("aggregate_monthly")
 }
 
-#' @export
-aggregate_monthly.catchment <- function(x, ...) {
-  x_monthly <-
-    x %>%
-    mutate(across(any_of(c("Q", "H", "Event")), as.numeric)) %>%
-    group_by_key() %>%
-    index_by(NewDate = ~ yearmonth(.)) %>%
-    summarize(
-      ## n = sum(is.na(Q)),
-      Q = mean(Q),
-      H = mean(H),
-      Event = sum(Event, na.rm = TRUE)
-    ) %>%
-    rename(Date = NewDate)
-  ## class(x_monthly) <- c("catchment", class(x))
-  x_monthly
-}
+## #' @export
+## aggregate_monthly.catchment <- function(x, ...) {
+##   x_monthly <-
+##     x %>%
+##     mutate(across(any_of(c("Q", "H", "Event")), as.numeric)) %>%
+##     group_by_key() %>%
+##     index_by(NewDate = ~ yearmonth(.)) %>%
+##     summarize(
+##       ## n = sum(is.na(Q)),
+##       across(any_of(c("Event")), sum, na.rm = TRUE),
+##       across(any_of(c("Q", "H")), mean, na.rm = TRUE)
+##       ## Q = mean(Q),
+##       ## H = mean(H),
+##       ## Event = sum(Event, na.rm = TRUE)
+##     ) %>%
+##     rename(Date = NewDate)
+##   ## class(x_monthly) <- c("catchment", class(x))
+##   x_monthly
+## }
 
 #' @export
 aggregate_monthly.tbl_ts <- function(x, ...) {
@@ -641,8 +643,8 @@ aggregate_monthly.tbl_ts <- function(x, ...) {
     group_by_key() %>%
     index_by(NewDate = ~ yearmonth(.)) %>%
     summarize(
-      across(any_of(c("Event")), sum),
-      across(any_of(c("Q", "H")), mean)
+      across(any_of(c("Event")), sum, na.rm = TRUE),
+      across(any_of(c("Q", "H")), mean, na.rm = TRUE)
     ) %>%
     rename(Date = NewDate)
   x_monthly
@@ -661,23 +663,25 @@ aggregate_annual <- function(x, ...) {
   UseMethod("aggregate_annual")
 }
 
-#' @export
-aggregate_annual.catchment <- function(x, ...) {
-  x_annual <-
-    x %>%
-    mutate(across(any_of(c("Q", "H", "Event")), as.numeric)) %>%
-    group_by_key() %>%
-    index_by(NewDate = ~ year(.)) %>%
-    summarize(
-      ## n = sum(is.na(Q)),
-      Q = mean(Q, na.rm = TRUE),
-      H = mean(H, na.rm = TRUE),
-      Event = sum(Event, na.rm = TRUE)
-    ) %>%
-    rename(Date = NewDate)
-  ## class(x_annual) <- c("catchment", class(x))
-  x_annual
-}
+## #' @export
+## aggregate_annual.catchment <- function(x, ...) {
+##   x_annual <-
+##     x %>%
+##     mutate(across(any_of(c("Q", "H", "Event")), as.numeric)) %>%
+##     group_by_key() %>%
+##     index_by(NewDate = ~ year(.)) %>%
+##     summarize(
+##       ## n = sum(is.na(Q)),
+##       across(any_of(c("Event")), sum, na.rm = TRUE),
+##       across(any_of(c("Q", "H")), mean, na.rm = TRUE)
+##       ## Q = mean(Q, na.rm = TRUE),
+##       ## H = mean(H, na.rm = TRUE),
+##       ## Event = sum(Event, na.rm = TRUE)
+##     ) %>%
+##     rename(Date = NewDate)
+##   ## class(x_annual) <- c("catchment", class(x))
+##   x_annual
+## }
 
 #' @export
 aggregate_annual.tbl_ts <- function(x, ...) {
@@ -687,8 +691,8 @@ aggregate_annual.tbl_ts <- function(x, ...) {
     group_by_key() %>%
     index_by(NewDate = ~ year(.)) %>%
     summarize(
-      across(any_of(c("Event")), sum),
-      across(any_of(c("Q", "H")), mean)
+      across(any_of(c("Event")), sum, na.rm = TRUE),
+      across(any_of(c("Q", "H")), mean, na.rm = TRUE)
     ) %>%
     rename(Date = NewDate)
   x_annual

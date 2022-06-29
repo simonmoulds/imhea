@@ -23,9 +23,6 @@ catchment.stream_gauge <- function(x, ..., id = NA, area = NA) {
   stopifnot(!is.na(area))
   stopifnot(inherits(area, "units"))
   stopifnot(all(sapply(list(...), is_rain_gauge)))
-  ## TODO include additional metadata
-  ## TODO allow for the fact that there may not be any
-  ## precipitation gauges in the catchment
   ## gauges <- list(...)
   ## if (length(gauges) > 0) { }
   p_merged <- infill_precip(..., new_id = id)
@@ -40,15 +37,20 @@ catchment.stream_gauge <- function(x, ..., id = NA, area = NA) {
     update_tsibble(key = ID_new) %>%
     dplyr::select(-ID) %>%
     rename(ID = ID_new)
+  ## Join data
   x <- q %>% full_join(p_merged, by = c("ID", "Date"))
   ## Convert units to km^2
   catchment_area <- set_units(area, km^2)
+  ## Compute summary data (daily/monthly/annual etc.)
+  summary_data <- compute_summaries(x)
   ## Compute indices
-  catchment_indices <- compute_indices(x, catchment_area)
+  catchment_indices <- compute_indices(x, catchment_area, summary_data)
   ## class(x) <- c("catchment", class(x))
   new_tsibble(
     x, "area" = catchment_area,
-    "indices" = catchment_indices, class = "catchment"
+    "indices" = catchment_indices,
+    "summary_data" = summary_data,
+    class = "catchment"
   )
 }
 
@@ -67,6 +69,7 @@ catchment.tbl_ts <- function(x, area) {
 build_catchment <- function(x,
                             area = NULL,
                             indices = NULL,
+                            summary_data = NULL,
                             update_metadata = FALSE,
                             ...) {
   valid <- is_valid_tsibble(x)
@@ -75,18 +78,24 @@ build_catchment <- function(x,
   }
   if (update_metadata) {
     area <- set_units(area, km^2)
-    indices <- compute_indices(x, area)
+    summary_data <- compute_summaries(x)
+    indices <- compute_indices(x, area, summary_data)
   }
   area <- validate_area(area)
   indices <- validate_indices(indices)
+  summary_data <- validate_summary_data(summary_data)
   new_tsibble(
-    x, "area" = area, "indices" = indices, class = "catchment"
+    x, "area" = area, "indices" = indices,
+    "summary_data" = summary_data,
+    class = "catchment"
   )
 }
 
 validate_area <- function(area) area # TODO
 
 validate_indices <- function(indices) indices # TODO
+
+validate_summary_data <- function(summary_data) summary_data # TODO
 
 get_abort_message <- function(x, checks) {
   if (all(checks))
