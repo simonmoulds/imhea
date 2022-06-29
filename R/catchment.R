@@ -22,6 +22,7 @@ catchment.stream_gauge <- function(x, ..., id = NA, area = NA) {
   stopifnot(!is.na(id))
   stopifnot(!is.na(area))
   stopifnot(inherits(area, "units"))
+  stopifnot(all(sapply(list(...), is_rain_gauge)))
   ## TODO include additional metadata
   ## TODO allow for the fact that there may not be any
   ## precipitation gauges in the catchment
@@ -43,7 +44,7 @@ catchment.stream_gauge <- function(x, ..., id = NA, area = NA) {
   ## Convert units to km^2
   catchment_area <- set_units(area, km^2)
   ## Compute indices
-  catchment_indices <- compute_indices(x, area)
+  catchment_indices <- compute_indices(x, catchment_area)
   ## class(x) <- c("catchment", class(x))
   new_tsibble(
     x, "area" = catchment_area,
@@ -52,21 +53,122 @@ catchment.stream_gauge <- function(x, ..., id = NA, area = NA) {
 }
 
 #' @export
-catchment.tbl_ts <- function(x, ..., id = NA, ar = NA) {
-  ## TODO check validity?
-  class(x) <- c("catchment", class(x))
-  area(x) <- set_units(ar, km^2)
-  x <- x %>% update_indices()
-  x
+catchment.tbl_ts <- function(x, area) {
+  stopifnot(inherits(area, "units"))
+  x <- validate_tsibble(x)
+  catchment_area <- set_units(area, km^2)
+  catchment_indices = compute_indices(x, catchment_area)
+  new_tsibble(
+    x, "area" = catchment_area,
+    "indices" = catchment_indices, class = "catchment"
+  )
 }
 
-check_validity <- function(x) {
-  TRUE
+build_catchment <- function(x,
+                            area = NULL,
+                            indices = NULL,
+                            update_metadata = FALSE,
+                            ...) {
+  valid <- is_valid_tsibble(x)
+  if (!valid) {
+    return(x)
+  }
+  if (update_metadata) {
+    area <- set_units(area, km^2)
+    indices <- compute_indices(x, area)
+  }
+  area <- validate_area(area)
+  indices <- validate_indices(indices)
+  new_tsibble(
+    x, "area" = area, "indices" = indices, class = "catchment"
+  )
 }
 
-#' @export
-has_precipitation <- function(x, ...) {
-  any(stringr::str_starts(names(x, "Event")))
+validate_area <- function(area) area # TODO
+
+validate_indices <- function(indices) indices # TODO
+
+get_abort_message <- function(x, checks) {
+  if (all(checks))
+    return(NULL)
+  if (!checks[1]) {
+    msg <- c(
+      "x is not a tsibble.",
+      "i" = "You must supply a valid tsibble object."
+    )
+    return(msg)
+  }
+  msg <- c()
+  if (!checks[2])
+    idx <- index(x)
+    msg <- c(
+      msg,
+      "x" = paste0("index(x) equals ", paste(idx, collapse = ", "), "."),
+      "i" = "index(x) must equal 'Date'"
+    )
+  key <- key_vars(x)
+  if (!checks[3])
+    msg <- c(
+      msg,
+      "x" = paste0("x has ", length(key), " key variables."),
+      "i" = paste0("x must have one key variable called 'ID'")
+    )
+  if (!checks[4])
+    msg <- c(
+      msg,
+      "x" = paste0("key_vars(x) equals '", key, "'."),
+      "i" = paste0("x must have one key variable called 'ID'")
+    )
+  if (!checks[5])
+    nms <- names(x)
+    msg <- c(
+      msg,
+      "x" = paste0("x has column name(s) ", paste(nms, collapse = ", "), "."),
+      "i" = "x must contain a column 'Q' corresponding to streamflow"
+    )
+  msg <- c("x is not a valid tsibble.", msg)
+  return(msg)
+}
+
+check_valid_tsibble <- function(x) {
+  checks <- rep(FALSE, 5)
+  checks[1] <- is_tsibble(x)
+  if (!checks[1])
+    return(checks)
+  idx <- tsibble::index(x)
+  checks[2] <- isTRUE(idx == "Date")
+  key <- tsibble::key_vars(x)
+  checks[3] <- isTRUE(length(key) == 1)
+  checks[4] <- isTRUE(key[1] == "ID")
+  checks[5] <- isTRUE(has_streamflow(x))
+  return(checks)
+}
+
+is_valid_tsibble <- function(x) {
+  isTRUE(all(check_valid_tsibble(x)))
+}
+
+validate_tsibble <- function(x) {
+  checks <- check_valid_tsibble(x)
+  valid <- isTRUE(all(checks))
+  if (valid) {
+    return(x)
+  } else {
+    msg <- get_abort_message(x, checks)
+    rlang::abort(msg)
+  }
+}
+
+has_streamflow <- function(x) {
+  any(stringr::str_starts(names(x), "Q"))
+}
+
+has_precipitation <- function(x) {
+  any(stringr::str_starts(names(x), "Event"))
+}
+
+has_stage <- function(x) {
+  any(stringr::str_starts(names(x), "H"))
 }
 
 #' @export
@@ -100,6 +202,7 @@ infill_precip <- function(..., new_id) {
   P_HRes <- Precp_Fill_Compiled$P_HRes
   out <- tibble(Date = DateP_HRes, Event = P_HRes)
   out <- tipping_bucket_rain_gauge(out, id = new_id, date_column = "Date", event_column = "Event", event_units = "mm")
+  out
 }
 
 #' Aggregate rainfall data

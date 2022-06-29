@@ -78,7 +78,7 @@ catchment_area <-
 
 x <- catchment(
   q1, p1, p2, id = catchment_id,
-  ar = set_units(catchment_area, km^2)
+  area = set_units(catchment_area, km^2)
 )
 
 stop()

@@ -24,7 +24,6 @@ dplyr_col_modify.catchment <- function(data, cols) {
   update_metadata <- FALSE
   if (any(updated_cols %in% c("Q", "H", "Event")))
     update_metadata <- TRUE
-
   out <- build_catchment(res, area(data), indices(data), update_metadata)
   out
 }
@@ -32,7 +31,6 @@ dplyr_col_modify.catchment <- function(data, cols) {
 #' @export
 `names<-.catchment` <- function(x, value) {
   res <- NextMethod()
-  ## TODO check_validity
   build_catchment(res, area(x), indices(x), update_metadata = FALSE)
 }
 
@@ -59,7 +57,10 @@ group_by.catchment <- function(.data, ..., .add = FALSE,
 dplyr_reconstruct.catchment <- function(data, template) {
   ## template <- rename_join_tsibble(data, template)
   ## check_validity
-  data # TODO
+  res <- NextMethod()
+  area <- area(template)
+  indices <- indices(template)
+  build_catchment(x, area, indices, update_metadata = TRUE)
 }
 
 ## #' export
@@ -100,21 +101,4 @@ dplyr_reconstruct.catchment <- function(data, template) {
 ##   new <- as_tsibble(new) # this will validate the tsibble object
 ##   catchment(new, ar = area(old))
 ## }
-
-build_catchment <- function(x,
-                            area = NULL,
-                            indices = NULL,
-                            update_metadata = FALSE,
-                            ...) {
-  stopifnot(!update_metadata & !is.null(indices))
-  stopifnot(!update_metadata & !is.null(area))
-  stopifnot(inherits(area, "units"))
-  if (update_metadata) {
-    area <- set_units(area, km^2)
-    indices <- compute_indices(x, area)
-  }
-  new_tsibble(
-    x, "area" = area, "indices" = indices, class = "catchment"
-  )
-}
 

@@ -23,7 +23,7 @@
 #' @export
 `[.catchment` <- function(x, i, j, drop = FALSE) {
   res <- NextMethod()
-  new_tsibble(res, "area" = area(x), "indices" = indices(x), class = "catchment")
+  build_catchment(res, area(x), indices(x), update_metadata = FALSE)
 }
 
 #' @export

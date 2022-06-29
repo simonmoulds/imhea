@@ -50,10 +50,10 @@ tipping_bucket_rain_gauge <- function(x,
     mutate(Event = set_units(Event, event_units, mode = "standard")) %>%
     mutate(Event = set_units(Event, mm))
   if (!raw) {
-    class(x) <- c("tipping_bucket_rain_gauge", class(x))
+    class(x) <- c("rain_gauge", class(x))
     return(x)
   }
-  class(x) <- c("tipping_bucket_rain_gauge", class(x))
+  class(x) <- c("rain_gauge", class(x))
   return(x)
 }
 
@@ -92,4 +92,14 @@ stream_gauge <- function(x,
       mutate(H = set_units(H, m))
   class(x) <- c("stream_gauge", class(x))
   return(x)
+}
+
+#' @export
+is_rain_gauge <- function(x) {
+  isTRUE(inherits(x, "rain_gauge"))
+}
+
+#' @export
+is_stream_gauge <- function(x) {
+  isTRUE(inherits(x, "stream_gauge"))
 }

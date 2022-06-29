@@ -20,8 +20,6 @@ compute_indices <- function(x, area, ...) {
 compute_indices.tbl_ts <- function(x, area, ...) {
   indices_p <- process_p(as_tsibble(x))
   indices_q <- process_q(as_tsibble(x), area)
-  ## indices(x) <- c(indices_p, indices_q)
-  ## x
   indices <- c(indices_p, indices_q)
   indices
 }
@@ -82,6 +80,16 @@ process_p <- function(x, ...) {
   ## IDC  = Maximum Intensity - Duration Curve [mm/h v time].
   ## CumP = Cumulative Precipitation [date v mm].
   ## DP   = Daily precipitation only when data exist [date v mm].
+  if (!has_precipitation(x))
+    return(list(PYear = NA,
+                DayP0 = NA,
+                PP0 = NA,
+                PM = NA,
+                PMDry = NA,
+                SI = NA,
+                IDC = NA,
+                iM15m = NA,
+                iM1hr = NA))
 
   ## Number of days with zero precipitation
   x_daily <- aggregate_daily(x)
