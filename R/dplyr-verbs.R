@@ -12,7 +12,7 @@ as_catchment.tbl_ts <- function(x, area, ...) {
 #' @export
 dplyr_row_slice.catchment <- function(data, i, ..., preserve = FALSE) {
   res <- NextMethod()
-  build_catchment(res, area(data), indices(data), summary_data(data), update_metadata = FALSE)
+  build_catchment(res, area(data), indices(data), summary_data(data), baseflow_data(data), update_metadata = FALSE)
 }
 
 #' @export
@@ -21,15 +21,15 @@ dplyr_col_modify.catchment <- function(data, cols) {
   cols_used <- attr(cols, "used")
   updated_cols <- names(cols_used)[cols_used]
   update_metadata <- FALSE
-  if (any(updated_cols %in% c("Q", "H", "Event")))
+  if (any(updated_cols %in% c("Q", "H", "P")))
     update_metadata <- TRUE
-  build_catchment(res, area(data), indices(data), summary_data(data), update_metadata)
+  build_catchment(res, area(data), indices(data), summary_data(data), baseflow_data(data), update_metadata)
 }
 
 #' @export
 `names<-.catchment` <- function(x, value) {
   res <- NextMethod()
-  build_catchment(res, area(x), indices(x), summary_data(x), update_metadata = FALSE)
+  build_catchment(res, area(x), indices(x), summary_data(x), baseflow_data(x), update_metadata = FALSE)
 }
 
 #' @importFrom dplyr group_by_drop_default
@@ -56,7 +56,7 @@ dplyr_reconstruct.catchment <- function(data, template) {
   ## template <- rename_join_tsibble(data, template)
   ## check_validity
   res <- NextMethod()
-  build_catchment(x, area(template), indices(template), summary_data(template), update_metadata = TRUE)
+  build_catchment(x, area(template), indices(template), summary_data(template), baseflow_data(template), update_metadata = TRUE)
 }
 
 ## #' export

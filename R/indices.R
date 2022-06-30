@@ -1,70 +1,14 @@
-#' Compute indices
-#'
-#' TODO
-#'
-#' @param x catchment.
-#' @param area units.
-#' @param ... Additional arguments.
-#'
-#' @return TODO
-#'
-#' @examples
-#' \dontrun{
-#' sum(1:10)
-#' }
-compute_indices <- function(x, area, ...) {
-  UseMethod("compute_indices")
+#' @export
+update_indices <- function(x) {
+  UseMethod("update_indices")
 }
 
 #' @export
-compute_indices.tbl_ts <- function(x, area, summary_data, ...) {
-  indices_p <- process_p(x, summary_data)
-  indices_q <- process_q(x, area, summary_data)
-  indices <- c(indices_p, indices_q)
-  indices
-}
-
-#' @export
-`indices<-` <- function(x, value) {
-  UseMethod('indices<-')
-}
-
-#' @export
-`indices<-.tbl_ts` <- function(x, value) {
-  attr(x, "indices") <- value
+update_indices.catchment <- function(x) {
+  indices_p <- process_p(x, summary_data(x))
+  indices_q <- process_q(x, area(x), summary_data(x), baseflow_data(x))
+  indices(x) <- c(indices_p, indices_q)
   x
-}
-
-#' @export
-indices <- function(x) {
-  UseMethod("indices")
-}
-
-#' @export
-indices.catchment <- function(x) {
-  attr(x, "indices")
-}
-
-#' @export
-`area<-` <- function(x, value) {
-  UseMethod('area<-')
-}
-
-#' @export
-`area<-.catchment` <- function(x, value) {
-  stopifnot(inherits(value, "units"))
-  attr(x, "area") <- value
-  x
-}
-
-#' @export
-area <- function(x) {
-  UseMethod("area")
-}
-
-#' @export
-area.catchment <- function(x) {
-  attr(x, "area")
 }
 
 process_p <- function(x, summary_data, ...) {
@@ -96,7 +40,7 @@ process_p <- function(x, summary_data, ...) {
   x_monthly <- summary_data$monthly
   idc <- summary_data$IDC
 
-  DayP <- x_daily$Event %>% as.numeric() %>% na.omit()
+  DayP <- x_daily$P %>% as.numeric() %>% na.omit()
   k <- length(DayP)
   ZeroP <- DayP[DayP == 0]
   DayP0 <- floor(365 * length(ZeroP) / k)
@@ -108,12 +52,12 @@ process_p <- function(x, summary_data, ...) {
     as_tibble() %>%
     mutate(Month = month(Date)) %>%
     group_by(Month) %>%
-    summarize(Event = mean(Event), n = n())
+    summarize(P = mean(P), n = n())
   annual_summary <- PM %>%
     summarize(
-      PMWet = max(Event),
-      PMDry = min(Event),
-      PYear = sum(Event)
+      PMWet = max(P),
+      PMDry = min(P),
+      PYear = sum(P)
     )
   PMDry <- annual_summary$PMDry
   PYear <- annual_summary$PYear
@@ -141,7 +85,7 @@ process_p <- function(x, summary_data, ...) {
 
 compute_idc <- function(x, ...) {
   Date <- x$Date
-  P <- x$Event %>% as.numeric()
+  P <- x$P %>% as.numeric()
   scale <- median(diff(Date)) %>% as.numeric(units = "mins")
   ## TODO aggregate to 5 minute intervals if needed
   stopifnot(scale == 5) # FIXME
@@ -163,7 +107,7 @@ compute_idc <- function(x, ...) {
   idc
 }
 
-process_q <- function(x, area, summary_data, normalize = FALSE, ...) {
+process_q <- function(x, area, summary_data, baseflow_data, normalize = FALSE, ...) {
   area <- set_units(area, m2)
   if (normalize)
     x <- x %>% mutate(Q = Q / area)
@@ -218,11 +162,12 @@ process_q <- function(x, area, summary_data, normalize = FALSE, ...) {
   IRH <- sum(auxFDC) / sum(fdc$Q)
 
   ## Compute baseflow using daily data
-  BQ1 <- baseflow(x_daily$Date, x_daily$Q, method = "UKIH")
-  BFI1 <- compute_baseflow_index(x_daily$Date, x_daily$Q, BQ1)
+  BQ1 <- baseflow_data[["UKIH"]]$Qb
+  BFI1 <- compute_baseflow_index(x_daily$Q, BQ1)
   k1 <- compute_recession_constant(x_daily$Date, BQ1)
-  BQ2 <- baseflow(x_daily$Date, x_daily$Q, method = "Chapman1999")
-  BFI2 <- compute_baseflow_index(x_daily$Date, x_daily$Q, BQ2)
+  BQ2 <- baseflow_data[["Chapman1999"]]$Qb2
+  ## BQ2 <- baseflow(x_daily$Date, x_daily$Q, method = "Chapman1999")
+  BFI2 <- compute_baseflow_index(x_daily$Q, BQ2)
   k2 <- compute_recession_constant(x_daily$Date, x_daily$Q, n_day = 7)
 
   ## Richards-Baker flashiness index (RBI).
@@ -414,7 +359,7 @@ indices_plus <- function(Date, Q, A, normalize, ...) {
     Q <- Q / A
 
   ## Average data at daily basis.
-  voids = identify_voids(tibble(Date = Date, Event = Q))
+  voids = identify_voids(tibble(Date = Date, P = Q))
   x <- tibble(Date = Date, Q = Q) %>%
     mutate(Date = ceiling_date(Date, unit = "1 day")) %>%
     group_by(Date) %>%
