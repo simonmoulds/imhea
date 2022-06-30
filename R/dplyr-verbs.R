@@ -32,12 +32,12 @@ dplyr_col_modify.catchment <- function(data, cols) {
   build_catchment(res, area(x), indices(x), summary_data(x), baseflow_data(x), update_metadata = FALSE)
 }
 
-#' @importFrom dplyr group_by_drop_default
-#' @export
-group_by.catchment <- function(.data, ..., .add = FALSE,
-                               .drop = group_by_drop_default(.data)) {
-  NextMethod()
-}
+## #' importFrom dplyr group_by_drop_default
+## #' export
+## group_by.catchment <- function(.data, ..., .add = FALSE,
+##                                .drop = group_by_drop_default(.data)) {
+##   NextMethod()
+## }
 
 ## #' export
 ## group_by.rain_gauge <- group_by.catchment
