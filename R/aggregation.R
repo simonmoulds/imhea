@@ -325,7 +325,7 @@ aggregation_cs <- function(x,
   out <- tibble::tibble(Date = NewDate, P = NewP, CumP = CumP, Single = Single)
   out <- out %>%
     filter(NewDate >= DI & NewDate <= DF)
-  out <- tipping_bucket_rain_gauge(
+  out <- rain_gauge(
     out,
     catchment_id,
     date_column = "Date",

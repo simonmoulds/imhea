@@ -97,8 +97,8 @@ p2_raw = read_csv(
 )
 
 # Convert precipitation data to rain_gauge objects:
-p1 <- p1_raw \%>\% tipping_bucket_rain_gauge(id = "LLO_01_P0_01", event_units = "mm")
-p2 <- p2_raw \%>\% tipping_bucket_rain_gauge(id = "LLO_01_P0_02", event_units = "mm")
+p1 <- p1_raw \%>\% rain_gauge(id = "LLO_01_P0_01", event_units = "mm")
+p2 <- p2_raw \%>\% rain_gauge(id = "LLO_01_P0_02", event_units = "mm")
 
 # Convert streamflow data to stream_gauge object:
 q1 <-

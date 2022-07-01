@@ -16,28 +16,27 @@ knitr::opts_chunk$set(
 
 ```{r setup}
 library(imhea)
-library(ggplot2)
 ```
 
 ```{r}
-iMHEA_Catchment_AREA = read_csv(
+iMHEA_Catchment_AREA = readr::read_csv(
   system.file("extdata", "iMHEA_Data_Areas.csv", package = "imhea"),
   show_col_types = FALSE
 )
 ```
 
 ```{r}
-q1_raw <- read_csv(
+q1_raw <- readr::read_csv(
   system.file("extdata", "LLO/iMHEA_LLO_01_HI_01_raw.csv", package = "imhea"),
   show_col_types = FALSE
 )
 
-p1_raw = read_csv(
+p1_raw = readr::read_csv(
   system.file("extdata", "LLO/iMHEA_LLO_01_PO_01_raw.csv", package = "imhea"),
   show_col_types = FALSE
 )
 
-p2_raw = read_csv(
+p2_raw = readr::read_csv(
   system.file("extdata", "LLO/iMHEA_LLO_01_PO_02_raw.csv", package = "imhea"),
   show_col_types = FALSE
 )
@@ -67,15 +66,15 @@ Define the catchment ID, and retrieve catchment area:
 ```{r}
 catchment_id <- "LLO_01"
 catchment_area <-
-  iMHEA_Catchment_AREA %>%
-  filter(Catchment %in% catchment_id) %>%
-  `[`(, 2, drop=T)
+  iMHEA_Catchment_AREA |>
+  dplyr::filter(Catchment %in% catchment_id)
+catchment_area <- catchment_area[1, 2, drop=TRUE]
 ```
 
 Create a catchment object (this takes a few minutes):
 
 ```{r}
-x <- catchment(q1, p1, p2, id = catchment_id, area = set_units(catchment_area, km^2))
+x <- catchment(q1, p1, p2, id = catchment_id, area = units::set_units(catchment_area, km^2))
 ```
 
 Have a look at the catchment indices:
@@ -87,6 +86,9 @@ indices(x)
 Make some plots:
 
 ```{r}
+library(ggplot2)
+library(units)
+library(tsibble)
 p1 <- ggplot(data = daily(x), aes(x = Date, y = P)) +
   geom_line()
 
@@ -94,7 +96,7 @@ p2 <- ggplot(data = daily(x), aes(x = Date, y = Q)) +
   geom_line()
 ```
 
-Join plots using `patchwork`
+Join plots together:
 
 ```{r}
 library(patchwork)

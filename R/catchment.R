@@ -38,8 +38,8 @@
 #' )
 #'
 #' # Convert precipitation data to rain_gauge objects:
-#' p1 <- p1_raw %>% tipping_bucket_rain_gauge(id = "LLO_01_P0_01", event_units = "mm")
-#' p2 <- p2_raw %>% tipping_bucket_rain_gauge(id = "LLO_01_P0_02", event_units = "mm")
+#' p1 <- p1_raw %>% rain_gauge(id = "LLO_01_P0_01", event_units = "mm")
+#' p2 <- p2_raw %>% rain_gauge(id = "LLO_01_P0_02", event_units = "mm")
 #'
 #' # Convert streamflow data to stream_gauge object:
 #' q1 <-
@@ -470,7 +470,7 @@ infill_precip <- function(..., new_id) {
   DateP_HRes <- Precp_Fill_Compiled$Date
   P_HRes <- Precp_Fill_Compiled$P_HRes
   out <- tibble(Date = DateP_HRes, P = P_HRes)
-  out <- tipping_bucket_rain_gauge(out, id = new_id, date_column = "Date", event_column = "P", event_units = "mm")
+  out <- rain_gauge(out, id = new_id, date_column = "Date", event_column = "P", event_units = "mm")
   out
 }
 

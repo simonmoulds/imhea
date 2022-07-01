@@ -38,8 +38,8 @@ p2_raw = readr::read_csv(
 )
 
 ## Convert precipitation data to rain_gauge objects:
-p1 <- p1_raw %>% tipping_bucket_rain_gauge(id = "LLO_01_P0_01", event_units = "mm")
-p2 <- p2_raw %>% tipping_bucket_rain_gauge(id = "LLO_01_P0_02", event_units = "mm")
+p1 <- p1_raw %>% rain_gauge(id = "LLO_01_P0_01", event_units = "mm")
+p2 <- p2_raw %>% rain_gauge(id = "LLO_01_P0_02", event_units = "mm")
 
 ## Convert streamflow data to stream_gauge object:
 q1 <-
@@ -58,16 +58,19 @@ catchment_area <-
   dplyr::filter(Catchment %in% catchment_id) %>%
   `[`(, 2, drop=T)
 
-stop()
-
 ## Create a catchment object (this takes a few minutes):
 x <- catchment(q1, p1, p2, id = catchment_id, area = units::set_units(catchment_area, km^2))
+
+stop()
 
 ## Have a look at the catchment indices:
 indices(x)
 
 ## Make some plots (we can create some functions to automate this process if needed):
-library(ggplot)
+library(ggplot2)
+library(patchwork)
+library(units)
+library(tsibble)
 p1 <- ggplot(data = daily(x), aes(x = Date, y = P)) +
   geom_line()
 
@@ -75,7 +78,6 @@ p2 <- ggplot(data = daily(x), aes(x = Date, y = Q)) +
   geom_line()
 
 ## Join plots using `patchwork`
-library(patchwork)
 p1 + p2 + plot_layout(ncol = 1, nrow = 2)
 
 ## Plot monthly/annual summaries
@@ -92,11 +94,13 @@ p1 <- ggplot(data = idc(x), aes(x = as.numeric(D), y = Intensity)) +
   geom_line() +
   scale_x_continuous(trans = "log10") +
   xlab("Duration [min]")
+p1
 
 p2 <- ggplot(data = fdc(x), aes(x = Exceedance_Pct, y = Q)) +
   geom_line() +
   scale_y_continuous(trans = "log10") +
   ylab("Discharge [m3/s]")
+p2
 
 ## Plot baseflow
 d <- baseflow_data(x)[["UKIH"]]

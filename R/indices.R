@@ -217,7 +217,9 @@ compute_fdc <- function(x, ...) {
     FUN=function(xout)
       spline(x = pct, y = Q, xout = xout)$y
   )
-  tibble(Exceedance_Pct = pct_out, Q = Q_out)
+  xout <- tibble(Exceedance_Pct = pct_out, Q = Q_out)
+  xout <- xout %>% add_units()
+  xout
 }
 
 ## monthly_flow <- function(Date, Q) {
