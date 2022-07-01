@@ -96,10 +96,10 @@ p1 <- ggplot(data = idc(x), aes(x = as.numeric(D), y = Intensity)) +
   xlab("Duration [min]")
 p1
 
-p2 <- ggplot(data = fdc(x), aes(x = Exceedance_Pct, y = Q)) +
+p2 <- ggplot(data = fdc(x), aes(x = Exceedance_Pct, y = as.numeric(Q))) +
   geom_line() +
   scale_y_continuous(trans = "log10") +
-  ylab("Discharge [m3/s]")
+  ylab(expression(paste("Discharge [", m^3/s, "]")))
 p2
 
 ## Plot baseflow

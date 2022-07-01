@@ -7,10 +7,10 @@ Install imhea from github:
 
 ``` r 
 library(devtools)
-devtools::install_github("https://github.com/simonmoulds/imhea", build_vignettes = TRUE)
+devtools::install_github("https://github.com/simonmoulds/imhea")
 ```
 
-Building the vignette will take quite a long time (about 5 minutes or so). If you do not require the vignette you can set `build_vignette = FALSE`. 
+<!-- Building the vignette will take quite a long time (about 5 minutes or so). If you do not require the vignette you can set `build_vignette = FALSE`.  -->
 
 ## Workflow 
 
@@ -133,10 +133,10 @@ ggplot(data = idc(x), aes(x = as.numeric(D), y = Intensity)) +
 ```
 
 ```{r}
-ggplot(data = fdc(x), aes(x = Exceedance_Pct, y = Q)) +
+ggplot(data = fdc(x), aes(x = Exceedance_Pct, y = as.numeric(Q))) +
   geom_line() +
   scale_y_continuous(trans = "log10") +
-  ylab("Discharge [m3/s]")
+  ylab(expression(paste("Discharge [", m^3/s, "]")))
 ```
 
 Plot baseflow:
@@ -163,7 +163,7 @@ p1 + p2 + plot_layout(ncol = 1, nrow = 2)
 
 ## Known issues 
 
-There are some parts of the package that need further work:
+This package is a work in progress. There are some parts of the package that need further work:
 
 * The package does not currently compute all the indices from the MATLAB scripts
 * The package still needs a nice `print` generic function to display the various indices
