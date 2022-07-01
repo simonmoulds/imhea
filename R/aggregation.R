@@ -9,7 +9,8 @@ aggregation_cs <- function(x,
   keys <- key_data(x)
   if (nrow(keys) > 1)
     stop("More than one key not currently supported")
-  id <- keys[1, 1, drop=TRUE]
+  ## id <- keys[1, 1, drop=TRUE]
+  catchment_id <- id(x)
 
   P_Date <- x[["Date"]]
   P_mm <- x[["P"]]
@@ -20,22 +21,22 @@ aggregation_cs <- function(x,
   ## TODO document these values or set as package options
 
   ## Minimum intensity to separate events: 0.2 mm h^-1 [Padron et al, 2015].
-  Minint = set_units(0.2, "mm/h")
+  Minint = units::set_units(0.2, "mm/h")
 
   ## Maximum intensity to merge events:
   ## 12.7 cm h^-1 [Onset, 2013], or
   ## 300 mm h^-1 [Manz, personal communication].
-  Maxint = set_units(127, "mm/h")
+  Maxint = units::set_units(127, "mm/h")
 
   ## Intensity to distribute single tips: 3 mm h^{-1} [Wang et al, 2008].
-  Meanint = set_units(3, "mm/h")
+  Meanint = units::set_units(3, "mm/h")
 
   ## Threshold intensity above which data is kept:
   ## 0.10 mm h^{-1} [Wang et al, 2008], or 1/2 Minint
-  Lowint = min(set_units(0.1, "mm/h"), Minint / 2) # FIXME [mm min^{-1}]
+  Lowint = min(units::set_units(0.1, "mm/h"), Minint / 2) # FIXME [mm min^{-1}]
 
   ## Move date by 0.25 seconds to avoid numerical or exportation errors.
-  P_Date = P_Date - seconds(0.25)
+  P_Date = P_Date - lubridate::seconds(0.25)
 
   ## TODO move to helpers file
   is_wholenumber <- function(x, tol = .Machine$double.eps^0.5)  {
@@ -48,7 +49,7 @@ aggregation_cs <- function(x,
     stop("Argument `timescale` should be a multiple of 60s (i.e. whole minutes)")
   }
 
-  Voids = identify_voids(tibble(Date = P_Date, P = P_mm))
+  Voids = identify_voids(tibble::tibble(Date = P_Date, P = P_mm))
 
   NewP_Date = P_Date
   NewP_mm = P_mm
@@ -60,9 +61,9 @@ aggregation_cs <- function(x,
   ## N.B.
   ## * [bucket / Minint] gives the minimum time between tips in hours
   ## * multiplying by [60 * (1 / nd)] converts to days
-  MaxT = set_units(bucket / Minint, seconds)
+  MaxT = units::set_units(bucket / Minint, seconds)
   ## Minimum tip interval to merge events.
-  MinT = set_units(bucket / Maxint, seconds)
+  MinT = units::set_units(bucket / Maxint, seconds)
   ## Aggregate events to avoid large intensities
   if (mintip) {
     x = aggregate_events(NewP_Date, NewP_mm)
@@ -73,7 +74,7 @@ aggregation_cs <- function(x,
   NewP_mm = x$Prec
 
   ## Adding a supporting initial extreme to avoid crashing the code later.
-  NewP_Date = c(P_Date[1] - seconds(MaxT), NewP_Date)
+  NewP_Date = c(P_Date[1] - lubridate::seconds(MaxT), NewP_Date)
   NewP_mm = c(0, NewP_mm)
 
   ## Redistribute rainfall tips occurring at relatively long periods.
@@ -85,7 +86,7 @@ aggregation_cs <- function(x,
   NewP_Date = NewP_Date[2:length(NewP_Date)]
   NewP_mm = NewP_mm[2:length(NewP_mm)]
 
-  NewPDiff = set_units(int_length(int_diff(NewP_Date)), seconds) > MaxT
+  NewPDiff = units::set_units(lubridate::int_length(lubridate::int_diff(NewP_Date)), s) > MaxT
   ## Make first point the start of a new event
   NewPDiff = c(TRUE, NewPDiff)
   indx = which(NewPDiff)
@@ -102,28 +103,28 @@ aggregation_cs <- function(x,
   D = c(D, D_last)
   D = as.numeric(D, units = "mins")
 
-  ## Index of events consisting of only 1 tip
-  n1 = indx[n < 1]
-  cat(sprintf("Number of rainfall events identified: %6i", length(indx)), "\n")
-  cat(sprintf("Average duration of the events: %8.2f min", mean(D[D > 0])), "\n")
-  cat(sprintf("Rainfall events consisting of 1 tip only: %6i", length(n1)), "\n")
+  ## ## Index of events consisting of only 1 tip
+  ## n1 = indx[n < 1]
+  ## cat(sprintf("Number of rainfall events identified: %6i", length(indx)), "\n")
+  ## cat(sprintf("Average duration of the events: %8.2f min", mean(D[D > 0])), "\n")
+  ## cat(sprintf("Rainfall events consisting of 1 tip only: %6i", length(n1)), "\n")
 
   ## Build a 1 minute cumulative rainfall curve
-  DI = floor_date(min(P_Date), unit = "day")
-  DF = ceiling_date(max(P_Date), unit = "day")
+  DI = lubridate::floor_date(min(P_Date), unit = "day")
+  DF = lubridate::ceiling_date(max(P_Date), unit = "day")
   NewDate_1min = seq(DI, DF, by = "1 min")
-  CumP_1min = set_units(rep(0, length(NewDate_1min)), mm)
-  Single_1min = set_units(rep(0, length(NewDate_1min)), mm)
+  CumP_1min = units::set_units(rep(0, length(NewDate_1min)), mm)
+  Single_1min = units::set_units(rep(0, length(NewDate_1min)), mm)
   biased = rep(0, length(n))
   bEvent = rep(0, length(n))
 
   ## CONSTANTS
   ## TODO make these accessible at the package level
-  zero_mm <- set_units(0, mm)
-  zero_secs <- set_units(0, secs)
-  one_minute <- set_units(1, minute)
+  zero_mm <- units::set_units(0, mm)
+  zero_secs <- units::set_units(0, secs)
+  one_minute <- units::set_units(1, minute)
 
-  cat(sprintf("Interpolating data..."), "\n")
+  cat(sprintf("Interpolating precipitation data from gauge ID %s...", catchment_id), "\n")
   pb = txtProgressBar(min = 0, max = length(n), initial = 0)
   for (i in 1:length(n)) {
     ## Procedure:
@@ -133,10 +134,10 @@ aggregation_cs <- function(x,
     if (n[i] >= 1) {
       ## Relative time in seconds from the beginning of the event.
       x = (NewP_Date[indx[i] + (0:n[i])] - NewP_Date[indx[i]])
-      x = set_units(as.numeric(x, units = "secs"), "s")
+      x = units::set_units(as.numeric(x, units = "secs"), "s")
       ## Cumulative rainfall during the event
       y = cumsum(NewP_mm[indx[i]:(indx[i] + n[i])])
-      y = set_units(y, "mm")
+      y = units::set_units(y, "mm")
       if (halves) {
         ## Estimate initial point of the rainfall event
         ## Reduce half a second only to ensure correct initial data calculation
@@ -152,26 +153,26 @@ aggregation_cs <- function(x,
         ## Aggregating data at 1-min interval starting at :00
         DI = max(
           DI,
-          floor_date(NewP_Date[indx[i]] - seconds(x0), unit = "minute")
+          lubridate::floor_date(NewP_Date[indx[i]] - seconds(x0), unit = "minute")
         )
-        DF = ceiling_date(
-          NewP_Date[indx[i] + n[i]] + seconds(xf),
+        DF = lubridate::ceiling_date(
+          NewP_Date[indx[i] + n[i]] + lubridate::seconds(xf),
           unit = "minute"
         )
         x1m <- seq(DI, DF, by = "1 min") - NewP_Date[indx[i]]
         ## Convert from difftime to seconds, and add offset
-        x1m <- seconds(x1m) + seconds(x0)
-        x1m = set_units(as.numeric(round(x1m)), "secs")
+        x1m <- lubridate::seconds(x1m) + lubridate::seconds(x0)
+        x1m = units::set_units(as.numeric(round(x1m)), s)
       } else {
         ## Aggregating data at 1-min interval starting at :00
         DI = max(
           DI,
-          floor_date(NewP_Date[indx[i]] + seconds(0.5), unit = "minute")
+          lubridate::floor_date(NewP_Date[indx[i]] + lubridate::seconds(0.5), unit = "minute")
         )
-        DF = ceiling_date(NewP_Date[indx[i] + n[i]])
+        DF = lubridate::ceiling_date(NewP_Date[indx[i] + n[i]])
         x1m = seq(DI, DF, by = "1 min") - NewP_Date[indx[i]]
-        x1m <- seconds(x1m)
-        x1m <- set_units(as.numeric(round(x1m)), "secs")
+        x1m <- lubridate::seconds(x1m)
+        x1m <- units::set_units(as.numeric(round(x1m)), s)
       }
       ## TODO need to check these functions rigorously
       if (halves) {
@@ -193,7 +194,7 @@ aggregation_cs <- function(x,
         y1m = spline(x, y, method = 'natural', xout = x1m)
         y1m = y1m$y
       }
-      y1m <- set_units(y1m, "mm") # FIXME check this
+      y1m <- units::set_units(y1m, "mm") # FIXME check this
       ## ## The above spline routines work as in the MATLAB original,
       ## ## but can result in negative rainfall intensities. Using a
       ## ## monotonic spline prevents this:
@@ -227,36 +228,36 @@ aggregation_cs <- function(x,
       ## Meanint has units mm/h
       ## x0 is event duration in minutes
       ## xf is end of event in minutes
-      x0 = set_units(NewP_mm[indx[i]], mm) / Meanint - one_minute
+      x0 = units::set_units(NewP_mm[indx[i]], mm) / Meanint - one_minute
       xf = NewP_Date[indx[i]]
       ## Equally spaced divided tip [FIXME - equivalent to MATLAB?]
       x = seq(xf - minutes(round(set_units(x0, minute))), xf, by = "1 min")
       ## Initial date
-      DI = floor_date(xf - minutes(round(set_units(x0, minute))), unit = "minute")
+      DI = lubridate::floor_date(xf - lubridate::minutes(round(units::set_units(x0, minute))), unit = "minute")
       ## Final date
-      DF = ceiling_date(xf, unit = "minute")  # Final date in [min]
+      DF = lubridate::ceiling_date(xf, unit = "minute")  # Final date in [min]
       ## Equally spaced time interval
       x1m = seq(DI, DF, by = "1 min")
       y <-
-        (NewP_mm[indx[i]] * rep(1, length(x)) / (drop_units(set_units(x0, minute) + one_minute))) %>%
-        set_units(mm) # FIXME make sure this is consistent
+        (NewP_mm[indx[i]] * rep(1, length(x)) / (units::drop_units(units::set_units(x0, minute) + one_minute))) %>%
+        units::set_units(mm) # FIXME make sure this is consistent
 
       ## Tip counting
-      r1m = set_units(rep(0, length(x1m)), mm/minute)
+      r1m = units::set_units(rep(0, length(x1m)), mm/minute)
       if (x[1] == x1m[1]) {
         j = 2 # Data counter
-        r1m[1] = y[1] * set_units(1, 1/minute)
+        r1m[1] = y[1] * units::set_units(1, 1/minute)
       } else {
         j = 1 # Data counter
       }
       for (itb in 2:length(x1m)) {
         ## Aggregate values
         while (j <= length(y) & x[j] > x1m[itb-1] & x[j] <= x1m[itb]) {
-          r1m[itb] = r1m[itb] + y[j] * set_units(1, 1/minute)
+          r1m[itb] = r1m[itb] + y[j] * units::set_units(1, 1/minute)
           j = j + 1
         }
       }
-      y1m = cumsum(r1m * set_units(1, minute))
+      y1m = cumsum(r1m * units::set_units(1, minute))
       ## Assemble cumulative rainfall curve
       ix = NewDate_1min >= DI & NewDate_1min <= DF
       CumP_1min[ix] = CumP_1min[ix] + y1m
@@ -282,7 +283,7 @@ aggregation_cs <- function(x,
     by = paste0(drop_units(set_units(timescale, "min")), " min")
   )
   ## nt <- length(NewDate)
-  scale_int <- drop_units(set_units(timescale, minute))
+  scale_int <- units::drop_units(set_units(timescale, minute))
   ix1 <- seq(scale_int + 1, length(CumP_1min), by = scale_int)
   ix0 <- seq(1, length(CumP_1min) - scale_int, by = scale_int)
   if (halves) {
@@ -299,13 +300,13 @@ aggregation_cs <- function(x,
   NewP[round(NewP, 8) == zero_mm] <- 0
   Single[round(Single,8) == zero_mm] <- 0
   ## Cut the vectors to the actual initial and final date.
-  DI = ceiling_date(
+  DI = lubridate::ceiling_date(
     min(P_Date),
     unit = paste0(drop_units(set_units(timescale, "min")), " min")
   )
-  DF = ceiling_date(
+  DF = lubridate::ceiling_date(
     max(P_Date),
-    unit = paste0(drop_units(set_units(timescale, "min")), " min")
+    unit = paste0(units::drop_units(units::set_units(timescale, "min")), " min")
   )
   CumP[NewDate < DI | NewDate > DF] = NA
   NewP[NewDate < DI | NewDate > DF] = NA
@@ -318,15 +319,15 @@ aggregation_cs <- function(x,
     NewP[idx] = NA
     Single[idx] = NA
   }
-  cat(sprintf('Rainfall volume before aggregation: %8.2f mm.\n', sum(P_mm, na.rm = TRUE)))
-  cat(sprintf('Rainfall volume after aggregation: %8.2f mm.\n', sum(NewP, na.rm = TRUE)))
-  ## out <- tibble(Date = NewDate, NewP=NewP, CumP=CumP, Single=Single)
-  out <- tibble(Date = NewDate, P = NewP, CumP = CumP, Single = Single)
+  ## cat(sprintf('Rainfall volume before aggregation: %8.2f mm.\n', sum(P_mm, na.rm = TRUE)))
+  ## cat(sprintf('Rainfall volume after aggregation: %8.2f mm.\n', sum(NewP, na.rm = TRUE)))
+  ## ## out <- tibble(Date = NewDate, NewP=NewP, CumP=CumP, Single=Single)
+  out <- tibble::tibble(Date = NewDate, P = NewP, CumP = CumP, Single = Single)
   out <- out %>%
     filter(NewDate >= DI & NewDate <= DF)
   out <- tipping_bucket_rain_gauge(
     out,
-    id,
+    catchment_id,
     date_column = "Date",
     event_column = "P",
     event_units = "mm"

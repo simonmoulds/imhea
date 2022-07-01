@@ -16,11 +16,7 @@ knitr::opts_chunk$set(
 
 ```{r setup}
 library(imhea)
-library(tidyverse)
-library(magrittr)
-library(tsibble)
-library(lubridate)
-library(units)
+library(ggplot2)
 ```
 
 ```{r}
@@ -161,7 +157,7 @@ There are some parts of the package that need further work:
 * The package still needs a nice `print` generic to display the various indices
 * Some of the functions are rather slow, especially the internal function which interpolates precipitation data to regular intervals using cubic splines
 
-I will be working to resolve these issues in the coming weeks. Other parts of the package may need changing depending on user needs. For example, I do not currently provide any specific plot functions because the `ggplot` methods are relatively easy to implement given the right data. I have therefore focused on developing the `catchment` class so that it easy to retrieve various data summaries (e.g. `idc()`, `fdc()`, `baseflow_data()`, and so on). However, if there are some specific plots which are needed repeatedly then I could develop a set of functions to do this. 
+I will be working to resolve these issues in the coming weeks. Other parts of the package may need changing depending on user needs. For example, I do not currently provide any specific plot functions because the `ggplot` methods are relatively easy to implement given the right data. I have therefore focused on developing the `catchment` class so that it easy to retrieve various data summaries (e.g. `idc()`, `fdc()`, `baseflow_data()`, and so on). However, I could develop functions to produce specific plots that are needed repeatedly.  
 
 It would also be helpful to know whether there are any aspects of the MATLAB scripts which are not used, so that the R package can be as lean as possible. 
 ## Contact 

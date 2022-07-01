@@ -1,5 +1,12 @@
 #' Create catchment object
 #'
+#' # Useful catchment methods:
+#' * [`daily()`], [`monthly()`] to get daily and monthly summaries
+#' * [`idc()`] to get the intensity duration curve
+#' * [`fdc()`] to get the flow duration curve
+#' * [`baseflow_data()`] to get baseflow data
+#' * [`summary_data()`] to get all summary data
+#'
 #' @param x stream_gauge
 #' @param ... rain_gauge objects.
 #' @param id character. Catchment ID.
@@ -73,16 +80,16 @@ catchment.stream_gauge <- function(x, ..., id = NA, area = NA) {
   stopifnot(all(sapply(list(...), is_rain_gauge)))
 
   ## Retrieve timestep from stream_gauge object
-  int_HRes <- median(int_length(lubridate::int_diff(x[[index(x)]])))
+  int_HRes <- median(lubridate::int_length(lubridate::int_diff(x[[tsibble::index(x)]])))
   timescale <- units::set_units(int_HRes, "s")
 
   ## Ensure timestep is consistent
   q <- aggregate(x, timescale = timescale)
   q <- q %>%
-    mutate(ID_new = id, .before = ID) %>%
-    update_tsibble(key = ID_new) %>%
+    dplyr::mutate(ID_new = id, .before = ID) %>%
+    tsibble::update_tsibble(key = ID_new) %>%
     dplyr::select(-ID) %>%
-    rename(ID = ID_new)
+    dplyr::rename(ID = ID_new)
 
   ## Ensure gauges have the same timestep
   gauges <- list(...)
@@ -98,17 +105,17 @@ catchment.stream_gauge <- function(x, ..., id = NA, area = NA) {
       p_merged <- gauges[[1]]
     }
     p_merged <- p_merged %>%
-      mutate(ID_new = id, .before = ID) %>%
-      update_tsibble(key = ID_new) %>%
+      dplyr::mutate(ID_new = id, .before = ID) %>%
+      tsibble::update_tsibble(key = ID_new) %>%
       dplyr::select(-ID) %>%
-      rename(ID = ID_new)
-    x <- q %>% full_join(p_merged, by = c("ID", "Date"))
+      dplyr::rename(ID = ID_new)
+    x <- q %>% dplyr::full_join(p_merged, by = c("ID", "Date"))
   } else {
     ## Otherwise catchment object does not have precipitation data
     x <- q
   }
   ## Convert units to km^2
-  catchment_area <- set_units(area, km^2)
+  catchment_area <- units::set_units(area, km^2)
   ## Compute summary data (daily/monthly/annual etc.)
   summary_data <- compute_summaries(x)
   baseflow_data <- compute_baseflow(summary_data$daily)
@@ -362,11 +369,11 @@ get_abort_message <- function(x, checks) {
   }
   msg <- c()
   if (!checks[2])
-    idx <- index(x)
+    idx <- tsibble::index(x)
     msg <- c(
       msg,
-      "x" = paste0("index(x) equals ", paste(idx, collapse = ", "), "."),
-      "i" = "index(x) must equal 'Date'"
+      "x" = paste0("tsibble::index(x) equals ", paste(idx, collapse = ", "), "."),
+      "i" = "tsibble::index(x) must equal 'Date'"
     )
   key <- key_vars(x)
   if (!checks[3])
@@ -453,7 +460,8 @@ infill_precip <- function(..., new_id) {
     myfun <- function(x, y, ...) full_join(x, y, by = "Date")
     Precp_Fill_Compiled <-
       Reduce(myfun, PrecHResFill) %>%
-      gather(-Date, key = "key", value = "value") %>%
+      pivot_longer(-Date, names_to = "key", values_to = "value") %>%
+      ## gather(-Date, key = "key", value = "value") %>%
       group_by(Date) %>%
       summarize(P_HRes = mean(value, na.rm = TRUE))
   } else {

@@ -63,6 +63,16 @@ A catchment object
 \description{
 Create catchment object
 }
+\section{Useful catchment methods:}{
+\itemize{
+\item \code{\link[=daily]{daily()}}, \code{\link[=monthly]{monthly()}} to get daily and monthly summaries
+\item \code{\link[=idc]{idc()}} to get the intensity duration curve
+\item \code{\link[=fdc]{fdc()}} to get the flow duration curve
+\item \code{\link[=baseflow_data]{baseflow_data()}} to get baseflow data
+\item \code{\link[=summary_data]{summary_data()}} to get all summary data
+}
+}
+
 \examples{
 
 \dontrun{

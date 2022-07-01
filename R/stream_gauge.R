@@ -43,21 +43,16 @@ tipping_bucket_rain_gauge <- function(x,
   stopifnot(event_column %in% names(x))
   stopifnot(!missing(event_units))
   x <- x %>%
-    rename(Date = date_column, P = event_column) %>%
+    dplyr::rename(Date = date_column, P = event_column) %>%
     dplyr::select(Date, P) %>%
-    mutate(ID = id, .before = "Date")
+    dplyr::mutate(ID = id, .before = "Date")
   x <- x %>%
     imhea_to_tsibble(date_column, date_format, tz, regular = FALSE)
   x <- x %>% depure() %>% dplyr::select(-Interval)
   x <- x %>%
-    mutate(P = set_units(P, event_units, mode = "standard")) %>%
-    mutate(P = set_units(P, mm))
-  ## if (!raw) {
-  ##   class(x) <- c("rain_gauge", class(x))
-  ##   return(x)
-  ## }
-  class(x) <- c("rain_gauge", class(x))
-  return(x)
+    dplyr::mutate(P = units::set_units(P, event_units, mode = "standard")) %>%
+    dplyr::mutate(P = units::set_units(P, mm))
+  tsibble::new_tsibble(x, class = "rain_gauge")
 }
 
 #' Load stream_gauge object
@@ -107,25 +102,23 @@ stream_gauge <- function(x,
   stopifnot(date_column %in% names(x))
   stopifnot(discharge_column %in% names(x))
   stopifnot(is.na(level_column) | isTRUE(level_column %in% names(x)))
-
-  x <- x %>% rename(Date = date_column, Q = discharge_column) #, Flag = flag_column)
+  x <- x %>% dplyr::rename(Date = date_column, Q = discharge_column)
   if (is.na(level_column)) {
     x <- x %>% dplyr::select(Date, Q) #, Flag)
   } else {
-    x <- x %>% rename(H = level_column) %>% dplyr::select(Date, Q, H) #, Flag)
+    x <- x %>% dplyr::rename(H = level_column) %>% dplyr::select(Date, Q, H) #, Flag)
   }
-  x <- x %>% mutate(ID = id, .before = "Date")
+  x <- x %>% dplyr::mutate(ID = id, .before = "Date")
   x <- x %>%
     imhea_to_tsibble(date_column, date_format, tz, regular = FALSE)
   x <- x %>%
-    mutate(Q = set_units(Q, discharge_units, mode = "standard")) %>%
-    mutate(Q = set_units(Q, m3/s))
+    dplyr::mutate(Q = units::set_units(Q, discharge_units, mode = "standard")) %>%
+    dplyr::mutate(Q = units::set_units(Q, m3/s))
   if ("H" %in% names(x))
     x <- x %>%
-      mutate(H = set_units(H, level_units, mode = "standard")) %>%
-      mutate(H = set_units(H, m))
-  class(x) <- c("stream_gauge", class(x))
-  return(x)
+      dplyr::mutate(H = units::set_units(H, level_units, mode = "standard")) %>%
+      dplyr::mutate(H = units::set_units(H, m))
+  tsibble::new_tsibble(x, class = "stream_gauge")
 }
 
 #' @rdname tipping_bucket_rain_gauge
@@ -150,16 +143,16 @@ imhea_to_tsibble <- function(x,
                              ...) {
   stopifnot(date_column %in% names(x))
   stopifnot(tz %in% valid_timezones())
-  x <- x %>% rename(Date = date_column)
+  x <- x %>% dplyr::rename(Date = date_column)
   if (is.character(x$Date))
     x <-
       x %>%
-      mutate(Date = as.POSIXct(Date, tz = tz, format = date_format))
+      dplyr::mutate(Date = as.POSIXct(Date, tz = tz, format = date_format))
   x <-
     x %>%
-    arrange(Date) %>%
-    filter(!are_duplicated(., key = ID, index = Date)) %>%
-    as_tsibble(key = ID, index = Date, regular = regular)
+    dplyr::arrange(Date) %>%
+    dplyr::filter(!tsibble::are_duplicated(., key = ID, index = Date)) %>%
+    tsibble::as_tsibble(key = ID, index = Date, regular = regular)
   x
 }
 
@@ -171,9 +164,9 @@ depure <- function(x, ...) {
   ## We add arbitrary long interval at the beginning of the time series
   start_interval = min_tip_interval * 100
   ## int_length(...) ALWAYS returns the length of the interval returned by int_diff(...) in seconds
-  x = x %>% mutate(Interval = c(start_interval, int_length(int_diff(Date))))
+  x = x %>% dplyr::mutate(Interval = c(start_interval, lubridate::int_length(lubridate::int_diff(Date))))
   ## Identify tips separated by less than min_tip_interval
-  x = x %>% mutate(P = ifelse(Interval <= min_tip_interval, 0, P))
+  x = x %>% dplyr::mutate(P = ifelse(Interval <= min_tip_interval, 0, P))
   ## %% PRINT RESULTS
   depured_rainfall_volume = x$P %>% sum(na.rm = TRUE)
   ## message(sprintf("Removing tips occurring faster than `min_tip_interval` = %6.2f seconds", min_tip_interval))

@@ -1,7 +1,22 @@
 #' imhea: handle hydrometeorological data from the iMHEA network.
 #'
 #' @aliases NULL imhea-package
+#' @importFrom lubridate floor_date ceiling_date
+#' @importFrom lubridate seconds minutes hours days yday month year
+#' @importFrom lubridate int_length int_diff
+#' @importFrom units set_units drop_units
+#' @importFrom dplyr arrange filter select mutate transmute summarize rename
+#' @importFrom dplyr group_by across
+#' @importFrom dplyr n count lead
+#' @importFrom dplyr left_join right_join full_join
 #' @importFrom dplyr dplyr_row_slice dplyr_col_modify dplyr_reconstruct
+#' @importFrom tidyr pivot_longer
+#' @importFrom magrittr "%>%"
+#' @importFrom tsibble tsibble new_tsibble as_tsibble
+#' @importFrom tsibble is_regular
+#' @importFrom tsibble group_by_key index_by key_vars index_var key index
+#' @importFrom tsibble key_data
+#' @importFrom tibble tibble as_tibble
 #'
 #' @examples
 #' \dontrun{

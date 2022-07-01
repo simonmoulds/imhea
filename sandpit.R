@@ -9,30 +9,30 @@
 
 ## TODO set verbosity of package
 
-library(devtools)
-library(tidyverse)
-library(tsibble)
-library(lubridate)
-library(units)
+## library(devtools)
+## library(tidyverse)
+## library(tsibble)
+## library(lubridate)
+## library(units)
 
-load_all("~/dev/imhea")
+devtools::load_all("~/dev/imhea")
 
-iMHEA_Catchment_AREA = read_csv(
+iMHEA_Catchment_AREA = readr::read_csv(
   system.file("extdata", "iMHEA_Data_Areas.csv", package = "imhea"),
   show_col_types = FALSE
 )
 
-q1_raw <- read_csv(
+q1_raw <- readr::read_csv(
   system.file("extdata", "LLO/iMHEA_LLO_01_HI_01_raw.csv", package = "imhea"),
   show_col_types = FALSE
 )
 
-p1_raw = read_csv(
+p1_raw = readr::read_csv(
   system.file("extdata", "LLO/iMHEA_LLO_01_PO_01_raw.csv", package = "imhea"),
   show_col_types = FALSE
 )
 
-p2_raw = read_csv(
+p2_raw = readr::read_csv(
   system.file("extdata", "LLO/iMHEA_LLO_01_PO_02_raw.csv", package = "imhea"),
   show_col_types = FALSE
 )
@@ -55,18 +55,19 @@ q1 <-
 catchment_id <- "LLO_01"
 catchment_area <-
   iMHEA_Catchment_AREA %>%
-  filter(Catchment %in% catchment_id) %>%
+  dplyr::filter(Catchment %in% catchment_id) %>%
   `[`(, 2, drop=T)
 
 stop()
 
 ## Create a catchment object (this takes a few minutes):
-x <- catchment(q1, p1, p2, id = catchment_id, area = set_units(catchment_area, km^2))
+x <- catchment(q1, p1, p2, id = catchment_id, area = units::set_units(catchment_area, km^2))
 
 ## Have a look at the catchment indices:
 indices(x)
 
 ## Make some plots (we can create some functions to automate this process if needed):
+library(ggplot)
 p1 <- ggplot(data = daily(x), aes(x = Date, y = P)) +
   geom_line()
 
