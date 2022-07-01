@@ -50,6 +50,7 @@ process_p <- function(x, summary_data, ...) {
   ## x_monthly <- aggregate_monthly(x)
   PM <- x_monthly %>%
     as_tibble() %>%
+    mutate(across(any_of(c("Q", "H", "P")), as.numeric)) %>%
     mutate(Month = month(Date)) %>%
     group_by(Month) %>%
     summarize(P = mean(P), n = n())
@@ -132,12 +133,13 @@ process_q <- function(x, area, summary_data, baseflow_data, normalize = FALSE, .
   QM <- x_monthly %>%
     na.omit() %>%
     as_tibble() %>%
+    mutate(across(any_of(c("Q", "H", "P")), as.numeric)) %>%
     mutate(Month = month(Date)) %>%
     group_by(Month) %>%
     summarize(Q = mean(Q), n = n())
   QM <- tibble(Month = 1:12) %>% left_join(QM, by = "Month")
 
-  QDMY <- mean(x_annual$Q)
+  QDMY <- mean(x_annual$Q %>% as.numeric())
   QMDry <- min(QM$Q)
   DRYQMEAN = QMDry / mean(QM$Q)
   DRYQWET = QMDry / max(QM$Q)

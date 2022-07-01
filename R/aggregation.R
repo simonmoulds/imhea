@@ -532,22 +532,18 @@ aggregate.stream_gauge <- function(x, timescale, ...) {
   timescale_str <- paste0(as.numeric(set_units(timescale, "min")), " min")
   x <-
     x %>%
-    mutate(across(any_of(c("Q", "H")), as.numeric)) %>%
-    group_by_key() %>%
-    index_by(NewDate = ~ ceiling_date(., unit = timescale_str)) %>%
-    summarize(across(any_of(c("Q", "H")), mean)) %>%
-    rename(Date = NewDate)
+    dplyr::mutate(across(any_of(c("Q", "H")), as.numeric)) %>%
+    dplyr::mutate(NewDate = ceiling_date(Date, timescale_str)) %>%
+    tsibble::group_by_key() %>%
+    tsibble::index_by(NewDate) %>%
+    ## This doesn't work - "object 'timescale_str' not found"
+    ## tsibble::index_by(NewDate = ~ lubridate::ceiling_date(., timescale_str)) |>
+    dplyr::summarize(across(any_of(c("Q", "H")), mean)) %>%
+    dplyr::rename(Date = NewDate)
   x <- x %>% tsibble::fill_gaps(.full = TRUE)
   x <- x %>% mutate(Q = zoo::na.approx(Q, maxgap = 1))
-  ## TODO get discharge/stage units from options
-  ## TODO pass x back to stream_gauge constructor
-  x <- x %>% mutate(Q = set_units(Q, m3/s))
-  if ("H" %in% names(x))
-    x <- x %>% mutate(H = set_units(H, m))
-  ## TODO pass back to the constructor
-  ## TODO separate class for stage?
-  class(x) <- c("stream_gauge", class(x))
-  x
+  x <- x %>% add_units()
+  new_tsibble(x, class = "stream_gauge")
 }
 
 #' @export
@@ -555,21 +551,15 @@ aggregate.rain_gauge <- function(x, timescale, ...) {
   timescale_str <- paste0(as.numeric(set_units(timescale, "min")), " min")
   x <-
     x %>%
-    mutate(across(any_of(c("P")), as.numeric)) %>%
-    group_by_key() %>%
-    index_by(NewDate = ~ ceiling_date(., unit = timescale_str)) %>%
-    summarize(across(any_of(c("P")), sum)) %>%
-    rename(Date = NewDate)
+    dplyr::mutate(across(any_of(c("P")), as.numeric)) %>%
+    dplyr::mutate(NewDate = ceiling_date(Date, timescale_str)) %>%
+    tsibble::group_by_key() %>%
+    tsibble::index_by(NewDate) %>%
+    dplyr::summarize(across(any_of(c("P")), sum)) %>%
+    dplyr::rename(Date = NewDate)
   x <- x %>% tsibble::fill_gaps(.full = TRUE)
-  ## x <- x %>% mutate(P = zoo::na.approx(P, maxgap = 1))
-  ## TODO fill with zeroes where NA, maxgap = 1
-  ## x <- x %>% mutate(P = set_units(P, mm))
-  ## x <- tipping_bucket_rain_gauge(
-  ##   x, date_column = "Date", event_column = "P", event_units = "mm"
-  ## )
-  ## class(x) <- c("rain_gauge", class(x))
-  ## class(x) <- c("tipping_bucket_rain_gauge", class(x))
-  x
+  x <- x %>% add_units()
+  new_tsibble(x, class = "stream_gauge")
 }
 
 #' @export
@@ -589,6 +579,7 @@ aggregate_daily.tbl_ts <- function(x, ...) {
       across(any_of(c("Q", "H")), mean, na.rm = TRUE)
     ) %>%
     rename(Date = NewDate)
+  x_daily <- x_daily %>% add_units()
   x_daily
 }
 
@@ -609,6 +600,7 @@ aggregate_hourly.tbl_ts <- function(x, ...) {
       across(any_of(c("Q", "H")), mean, na.rm = TRUE)
     ) %>%
     rename(Date = NewDate)
+  x_hourly <- x_hourly %>% add_units()
   x_hourly
 }
 
@@ -629,6 +621,7 @@ aggregate_monthly.tbl_ts <- function(x, ...) {
       across(any_of(c("Q", "H")), mean, na.rm = TRUE)
     ) %>%
     rename(Date = NewDate)
+  x_monthly <- x_monthly %>% add_units()
   x_monthly
 }
 
@@ -649,6 +642,13 @@ aggregate_annual.tbl_ts <- function(x, ...) {
       across(any_of(c("Q", "H")), mean, na.rm = TRUE)
     ) %>%
     rename(Date = NewDate)
+  x_annual <- x_annual %>% add_units()
   x_annual
 }
 
+add_units <- function(x) {
+  x <- x %>% mutate(across(starts_with("Q"), ~ units::set_units(., m3/s)))
+  x <- x %>% mutate(across(starts_with("H"), ~ units::set_units(., m)))
+  x <- x %>% mutate(across(starts_with("P"), ~ units::set_units(., mm)))
+  x
+}

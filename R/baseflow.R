@@ -33,7 +33,7 @@ compute_baseflow <- function(x, method = c("UKIH", "Chapman1999"), ...) {
 
 baseflow_ukih <- function(x, ...) {
   Date <- x$Date
-  Q <- x$Q
+  Q <- x$Q %>% as.numeric()
   Q[is.na(Q)] <- Inf
   ## Fixed interval of width 5
   int_width <- 5
@@ -84,12 +84,13 @@ baseflow_ukih <- function(x, ...) {
   xout <-
     tibble(ID = id(x), Date = Date, Q = Q, Qb = Qb, Qs = Qs) %>%
     as_tsibble(key = ID, index = Date, regular = is_regular(x))
+  xout <- xout %>% add_units()
   xout
 }
 
 baseflow_chapman <- function(x, ...) {
   Date <- x$Date
-  Q <- x$Q
+  Q <- x$Q %>% as.numeric()
   na_ix <- !is.na(Q)
   n <- length(Q)
   XDate <- Date[!is.na(Q)]
@@ -127,10 +128,12 @@ baseflow_chapman <- function(x, ...) {
       Qb2 = Qb2, Qs2 = Qs2, Qb3 = Qb3, Qs3 = Qs3
     ) %>%
     as_tsibble(key = ID, index = Date, regular = is_regular(x))
+  xout <- xout %>% add_units()
   xout
 }
 
 compute_recession_constant <- function(Date, Q, n_day = 5, ...) {
+  Q <- as.numeric(Q)
   lim <- 0.8 # Minimum R2 for linear fit
   n <- length(Date)
   R <- rep(0, n)
@@ -158,6 +161,8 @@ compute_recession_constant <- function(Date, Q, n_day = 5, ...) {
 }
 
 compute_baseflow_index <- function(Q, Qb, ...) {
+  Q <- as.numeric(Q)
+  Qb <- as.numeric(Qb)
   na_ix <- is.na(Qb) | is.na(Q)
   Qb <- Qb[!na_ix]
   Q <- Q[!na_ix]

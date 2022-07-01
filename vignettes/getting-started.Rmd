@@ -152,3 +152,19 @@ p2 <- ggplot(data = d, aes(x = factor(Month), y = P)) +
 
 p1 + p2 + plot_layout(ncol = 1, nrow = 2)
 ```
+
+## Known issues 
+
+There are some parts of the package that need further work:
+
+* The package does not currently compute all the indices from the MATLAB scripts
+* The package still needs a nice `print` generic to display the various indices
+* Some of the functions are rather slow, especially the internal function which interpolates precipitation data to regular intervals using cubic splines
+
+I will be working to resolve these issues in the coming weeks. Other parts of the package may need changing depending on user needs. For example, I do not currently provide any specific plot functions because the `ggplot` methods are relatively easy to implement given the right data. I have therefore focused on developing the `catchment` class so that it easy to retrieve various data summaries (e.g. `idc()`, `fdc()`, `baseflow_data()`, and so on). However, if there are some specific plots which are needed repeatedly then I could develop a set of functions to do this. 
+
+It would also be helpful to know whether there are any aspects of the MATLAB scripts which are not used, so that the R package can be as lean as possible. 
+## Contact 
+Simon Moulds (simon.moulds@ouce.ox.ac.uk).
+
+
