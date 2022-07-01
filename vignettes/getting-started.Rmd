@@ -16,7 +16,11 @@ knitr::opts_chunk$set(
 
 ```{r setup}
 library(imhea)
-library(readr)
+library(tidyverse)
+library(magrittr)
+library(tsibble)
+library(lubridate)
+library(units)
 ```
 
 ```{r}
@@ -46,15 +50,15 @@ p2_raw = read_csv(
 Convert precipitation data to rain_gauge objects:
 
 ```{r}
-p1 <- p1_raw %>% tipping_bucket_rain_gauge(id = "LLO_01_P0_01", event_units = "mm")
-p2 <- p2_raw %>% tipping_bucket_rain_gauge(id = "LLO_01_P0_02", event_units = "mm")
+p1 <- p1_raw |> tipping_bucket_rain_gauge(id = "LLO_01_P0_01", event_units = "mm")
+p2 <- p2_raw |> tipping_bucket_rain_gauge(id = "LLO_01_P0_02", event_units = "mm")
 ```
 
 Convert streamflow data to stream_gauge object:
 
 ```{r}
 q1 <-
-  q1_raw %>%
+  q1_raw |>
   stream_gauge(
     id = "LLO_01_HI_01",
     discharge_units = "l/s",

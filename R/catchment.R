@@ -73,8 +73,8 @@ catchment.stream_gauge <- function(x, ..., id = NA, area = NA) {
   stopifnot(all(sapply(list(...), is_rain_gauge)))
 
   ## Retrieve timestep from stream_gauge object
-  int_HRes <- median(int_length(int_diff(x[[index(x)]])))
-  timescale <- set_units(int_HRes, "s")
+  int_HRes <- median(int_length(lubridate::int_diff(x[[index(x)]])))
+  timescale <- units::set_units(int_HRes, "s")
 
   ## Ensure timestep is consistent
   q <- aggregate(x, timescale = timescale)
